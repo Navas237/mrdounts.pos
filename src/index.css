@@ -1,0 +1,367 @@
+@import "tailwindcss";
+
+/* Design Tokens - MR DONUTS (Clean High-Craft POS System) */
+:root {
+  /* Brand Burgundy */
+  --brand-950: #1a0508;
+  --brand-900: #2e0a10;
+  --brand-800: #3f0f16;
+  --brand-700: #58161f;   /* Official Brand Accent */
+  --brand-600: #72242e;
+  --brand-500: #8f3a44;
+  --brand-400: #b0535e;
+  --brand-300: #c9959b;
+  --brand-200: #e2c0c4;
+  --brand-100: #f4e6e8;
+  --brand-50:  #fdf8f8;
+  --white:     #ffffff;
+
+  /* Neutrals: Pure, architectural, high-contrast, zero mud */
+  --bg:         #f9fafb;  /* Neutral slate/gray 50 */
+  --surface:    #ffffff;  /* Crisp white surface */
+  --surface-2:  #f3f4f6;  /* Neutral gray 100 for segment controls */
+  --surface-3:  #e5e7eb;  /* Neutral gray 200 */
+  --border:     #e5e7eb;  /* Clean 1px border */
+  --border-strong: #d1d5db;
+  --text:       #111827;  /* High-contrast neutral 900 */
+  --text-muted: #6b7280;  /* Secondary text neutral 500 */
+  --text-dim:   #9ca3af;
+  --on-brand:   #ffffff;
+
+  /* Operational Status Colors */
+  --status-pending:   #d97706;  /* Amber */
+  --status-preparing: #2563eb;  /* Blue */
+  --status-ready:     #16a34a;  /* Green */
+  --status-cancelled: #dc2626;  /* Red */
+  --status-delivered: #6b7280;  /* Neutral */
+
+  /* Standardized Corner Radii - Strictly 6px, 8px, 12px. No pills/ovals! */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --tap-min: 44px;
+
+  --font-sans: "Baloo Bhaijaan 2", "Baloo 2", "Tajawal", system-ui, -apple-system, sans-serif;
+}
+
+/* Kitchen Dark Mode */
+[data-theme="dark"] {
+  --bg:         #0f1117;
+  --surface:    #181b24;
+  --surface-2:  #222634;
+  --surface-3:  #2d3345;
+  --border:     #282e40;
+  --border-strong: #3b435c;
+  --text:       #f9fafb;
+  --text-muted: #9ca3af;
+  --text-dim:   #6b7280;
+  --brand-700:  #8b2331;
+}
+
+/* Flashing Alert for Cancelled Items */
+@keyframes cancel-flash {
+  0%, 100% { background-color: var(--status-cancelled); color: #fff; }
+  50%      { background-color: #fff;                    color: var(--status-cancelled); }
+}
+.cancel-flash { animation: cancel-flash 0.8s ease-in-out infinite; }
+
+/* Scrollbar Utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html {
+  direction: rtl;
+  font-family: var(--font-sans);
+  background-color: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+}
+
+.touch-target,
+button,
+a,
+input,
+select {
+  touch-action: manipulation;
+}
+
+.touch-target {
+  min-height: var(--tap-min);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-700);
+  outline-offset: 1px;
+}
+
+@theme inline {
+  --color-brand-50:  var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-brand-950: var(--brand-950);
+  --color-app-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--text);
+  --color-ink-muted: var(--text-muted);
+  --color-ink-dim: var(--text-dim);
+  --color-pending: var(--status-pending);
+  --color-preparing: var(--status-preparing);
+  --color-ready: var(--status-ready);
+  --color-cancelled: var(--status-cancelled);
+  --color-delivered: var(--status-delivered);
+  --font-sans: var(--font-sans);
+}
+
+
+/* =========================================================
+   ZOHLEA V2 INSPIRED APP SHELL, SIDEBAR & DASHBOARD TOKENS
+   ========================================================= */
+:root {
+  --sidebar-w: 250px;
+  --topbar-h: 56px;
+}
+
+.shell-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--bg);
+}
+
+.shell-sidebar {
+  width: var(--sidebar-w);
+  flex: none;
+  background-color: var(--surface);
+  border-inline-end: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 30;
+  transition: width 0.2s ease, opacity 0.15s ease;
+}
+
+.shell-sidebar.collapsed {
+  width: 0 !important;
+  border-inline-end: none !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.brand-section {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 16px 14px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  border-bottom: 1px solid var(--border);
+}
+.brand-section:hover {
+  opacity: 0.92;
+}
+
+.brand-mark-box {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background-color: var(--brand-700);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.shift-mini-status {
+  margin: 10px 12px 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-2);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.live-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #16a34a;
+  flex: none;
+  position: relative;
+}
+.live-pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid #16a34a;
+  opacity: 0.45;
+}
+
+.sidebar-nav-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px 14px;
+}
+
+.sidebar-group {
+  margin-top: 12px;
+}
+.sidebar-group:first-child {
+  margin-top: 4px;
+}
+
+.sidebar-group-title {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 800;
+  padding: 3px 6px;
+  letter-spacing: 0.2px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 12px;
+  transition: all 0.15s ease;
+  margin-bottom: 2px;
+  text-decoration: none;
+}
+.sidebar-link:hover {
+  background-color: var(--surface-2);
+  color: var(--brand-700);
+}
+.sidebar-link.active-link {
+  background-color: var(--brand-700);
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(88, 22, 31, 0.2);
+}
+.sidebar-link-hint {
+  font-size: 11px;
+  opacity: 0.75;
+  font-weight: 500;
+  margin-inline-start: auto;
+}
+
+.sidebar-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.main-view-wrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-topbar {
+  height: var(--topbar-h);
+  background-color: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  position: sticky;
+  top: 0;
+  z-index: 25;
+}
+
+.shell-content-container {
+  padding: 16px 20px;
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+  min-height: calc(100vh - var(--topbar-h));
+}
+
+@media (max-width: 1024px) {
+  .shell-sidebar {
+    display: none;
+  }
+  .shell-content-container {
+    padding: 12px 12px calc(76px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Hourly Sales Bar Chart */
+.hour-bars-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 120px;
+  padding: 12px 0 24px;
+}
+.hour-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  position: relative;
+  cursor: pointer;
+}
+.hour-bar-fill {
+  width: 100%;
+  min-width: 8px;
+  max-width: 28px;
+  border-radius: 4px 4px 0 0;
+  background-color: var(--surface-3);
+  transition: all 0.2s ease;
+}
+.hour-bar-col:hover .hour-bar-fill {
+  background-color: var(--brand-400);
+}
+.hour-bar-col.is-peak .hour-bar-fill {
+  background-color: var(--brand-700);
+}
+.hour-bar-label {
+  position: absolute;
+  bottom: -22px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-family: monospace;
+}

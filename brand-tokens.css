@@ -1,0 +1,80 @@
+/* =====================================================================
+   MR DONUTS — Design Tokens (Ultra-Clean Modern POS System)
+   الألوان مسحوبة من اللوجو: بورجندي فاخر #58161F + أبيض ناصع #FCFCFB
+   عالي التباين، مريح للعين، مصمم خصيصاً لشاشات الكاشير والتابلت
+   ===================================================================== */
+
+:root {
+  /* ---- البراند الأساسي ---- */
+  --brand-950: #1a0508;
+  --brand-900: #2e0a10;
+  --brand-800: #3f0f16;
+  --brand-700: #58161f;   /* اللون الأساسي (من اللوجو) */
+  --brand-600: #72242e;
+  --brand-500: #8f3a44;
+  --brand-400: #b0535e;
+  --brand-300: #c9959b;
+  --brand-200: #e2c0c4;
+  --brand-100: #f4e6e8;
+  --brand-50:  #fdf8f8;
+  --white:     #ffffff;
+
+  /* ---- الأسطح والنصوص (نقاء فائق عالي التباين والوضوح) ---- */
+  --bg:         #f8fafc;  /* خلفية ناصعة مريحة للعين */
+  --surface:    #ffffff;  /* أبيض ناصع للكروت */
+  --surface-2:  #f1f5f9;  /* رمادي ناعم ونظيف للأسطح الفرعية */
+  --surface-3:  #e2e8f0;
+  --border:     #e2e8f0;  /* حدود رقيقة ونظيفة 1px */
+  --border-strong: #cbd5e1;
+  --text:       #0f172a;  /* رمادي/كحلي داكن ناصع عالي التباين */
+  --text-muted: #64748b;  /* قراءة ثانوية واضحة */
+  --text-dim:   #94a3b8;
+  --on-brand:   #ffffff;
+
+  /* ---- حالات الأوردر ---- */
+  --status-pending:   #d97706;  /* مستني — عنبري دافئ */
+  --status-preparing: #2563eb;  /* قيد التجهيز — أزرق ملكي */
+  --status-ready:     #16a34a;  /* جاهز — أخضر ناصع */
+  --status-cancelled: #dc2626;  /* ملغي — أحمر تحذيري */
+  --status-delivered: #64748b;  /* تم التسليم — رمادي معتدل */
+
+  /* ---- أبعاد ومقاسات شاشات اللمس ---- */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --tap-min: 48px;
+
+  --font-sans: "Cairo", "IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+
+/* وضع الشاشات الداكنة (مطبخ/أقسام) */
+[data-theme="dark"] {
+  --bg:         #0a0b10;
+  --surface:    #12151f;
+  --surface-2:  #1a1f2e;
+  --surface-3:  #242b3d;
+  --border:     #222a3d;
+  --border-strong: #333d56;
+  --text:       #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim:   #64748b;
+  --brand-700:  #8b2331;
+}
+
+/* تنوير الإلغاء على الشاشات */
+@keyframes cancel-flash {
+  0%, 100% { background-color: var(--status-cancelled); color: #fff; }
+  50%      { background-color: #fff;                    color: var(--status-cancelled); }
+}
+.cancel-flash { animation: cancel-flash 0.8s ease-in-out infinite; }
+
+/* إخفاء شريط التمرير الأفقي مع الحفاظ على التمرير باللمس */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
