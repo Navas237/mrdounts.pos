@@ -1,5 +1,5 @@
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
-import { demoOrders, demoShiftReport, demoItemSales, demoSauceConsumption, demoRecipes, demoPaymentMethods } from './pos.fixtures';
+import { demoOrders, demoShiftReport, demoItemSales, demoSauceConsumption, demoRecipes, demoPaymentMethods, demoZones, demoCustomerByPhone } from './pos.fixtures';
 
 // =====================================================================
 // خدمة عمليات نقطة البيع الجديدة — كل العمليات عبر RPC في الباك إند
@@ -119,7 +119,52 @@ function ensureLive() {
   return supabase;
 }
 
+export interface DeliveryZone { id: string; name: string; fee: number; sort_order: number; is_active: boolean }
+export interface CustomerLookup {
+  id: string; name: string; phone: string;
+  addresses: Array<{ id: string; label?: string | null; address: string; landmark?: string | null; is_default: boolean; zone_id: string | null; zone_name: string | null; zone_fee: number | null }>;
+}
+
 export const posService = {
+  // ---------------- مناطق التوصيل + بحث العميل (RPC) ----------------
+  async listDeliveryZones(includeInactive = false): Promise<DeliveryZone[]> {
+    if (isPosDemoMode) return demoZones.filter((z) => includeInactive || z.is_active).map((z) => ({ ...z }));
+    const client = ensureLive();
+    const { data, error } = await client.rpc('list_delivery_zones', { p_include_inactive: includeInactive });
+    if (error) throw new Error(error.message);
+    return (data || []) as DeliveryZone[];
+  },
+  async saveDeliveryZone(z: { id?: string | null; name: string; fee: number; sort_order?: number; is_active?: boolean }): Promise<void> {
+    if (isPosDemoMode) {
+      const ex = demoZones.find((d) => d.id === z.id);
+      if (ex) Object.assign(ex, { name: z.name, fee: z.fee, is_active: z.is_active ?? ex.is_active });
+      else demoZones.push({ id: `demo-zone-${Date.now()}`, name: z.name, fee: z.fee, sort_order: z.sort_order ?? demoZones.length + 1, is_active: z.is_active ?? true });
+      return;
+    }
+    const client = ensureLive();
+    const { error } = await client.rpc('upsert_delivery_zone', {
+      p_id: z.id || null, p_name: z.name, p_fee: z.fee, p_sort: z.sort_order ?? 0, p_active: z.is_active ?? true,
+    });
+    if (error) throw new Error(error.message);
+  },
+  async deleteDeliveryZone(id: string): Promise<void> {
+    if (isPosDemoMode) {
+      const i = demoZones.findIndex((d) => d.id === id);
+      if (i >= 0) demoZones.splice(i, 1);
+      return;
+    }
+    const client = ensureLive();
+    const { error } = await client.rpc('delete_delivery_zone', { p_id: id });
+    if (error) throw new Error(error.message);
+  },
+  async findCustomerByPhone(phone: string): Promise<CustomerLookup | null> {
+    if (isPosDemoMode) return demoCustomerByPhone[phone.trim()] || null;
+    const client = ensureLive();
+    const { data, error } = await client.rpc('find_customer_by_phone', { p_phone: phone });
+    if (error) throw new Error(error.message);
+    return (data as CustomerLookup | null) ?? null;
+  },
+
   // ---------------- طرق الدفع (جدول مرجعي، قراءة مباشرة) ----------------
   async listPaymentMethods(): Promise<PaymentMethod[]> {
     if (isPosDemoMode) return demoPaymentMethods;

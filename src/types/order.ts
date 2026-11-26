@@ -53,6 +53,7 @@ export interface OrderCustomerInfo {
   name: string;
   address?: string;
   delivery_zone?: string;
+  delivery_zone_id?: string;
   delivery_fee: number;
 }
 

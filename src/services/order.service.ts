@@ -1,3 +1,4 @@
+import { donutBoxName } from '@/utils/boxName';
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
 import { queryClient } from '@/lib/queryClient';
 import { CartItem, SplitPaymentItem, OrderType } from '@/types/order';
@@ -11,6 +12,8 @@ export interface CreateOrderInput {
   customerName?: string;
   customerPhone?: string;
   customerAddress?: string;
+  deliveryZoneId?: string;
+  deliveryZoneName?: string;
   subtotal: number;
   discountType: 'none' | 'fixed' | 'percentage';
   discountValue: number;
@@ -86,11 +89,7 @@ export const orderService = {
 
       const payloadItems = input.items.map((item) => ({
         department_id: resolveDeptId(item),
-        item_name:
-          item.item_name ||
-          (item.is_donut_box
-            ? `بوكس دونتس ${donutTypeName(item.donut_type) || ''} (${item.donut_pieces_count || 0} قطعة)`
-            : 'صنف'),
+        item_name: item.is_donut_box ? donutBoxName(item.donut_pieces_count, item.donut_type) : item.item_name || 'صنف',
         size_name: item.size_name || undefined,
         quantity: item.quantity,
         unit_price: item.unit_price,
@@ -121,7 +120,9 @@ export const orderService = {
         customer_name: input.customerName || undefined,
         customer_phone: input.customerPhone || undefined,
         address_snapshot: input.customerAddress ? { address: input.customerAddress } : null,
-        delivery_fee: input.deliveryFee || 0,
+        delivery_zone_id: input.deliveryZoneId || undefined,
+        delivery_zone_name: input.deliveryZoneName || undefined,
+        delivery_fee: input.deliveryFee || 0, // للعرض فقط: السيرفر يحسب الرسوم من المنطقة
         discount_type:
           input.discountType === 'percentage'
             ? 'percent'

@@ -1,11 +1,13 @@
 import { createPortal } from 'react-dom';
+import { donutBoxName } from '@/utils/boxName';
+import { ZonePickerSheet } from '@/components/shared/ZonePickerSheet';
+import { posService, DeliveryZone, CustomerLookup } from '@/services/pos.service';
 import { useAuthStore } from '@/hooks/useAuth';
 import { ThermalReceiptDoc, receiptFromCart, ReceiptData } from '@/components/shared/ThermalReceipt';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCart } from '@/hooks/useCart';
 import { formatCurrency } from '@/utils/formatters';
-import { customerService } from '@/services/customer.service';
 import { PaymentSection } from './PaymentSection';
 import { orderService } from '@/services/order.service';
 import {
@@ -73,61 +75,93 @@ export const CartBottomSection: React.FC = () => {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const branch = useAuthStore((st) => st.session?.branch);
+  const [selectedZone, setSelectedZone] = useState<DeliveryZone | null>(null);
+  const [showZoneSheet, setShowZoneSheet] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<CustomerLookup['addresses']>([]);
+  const [lookupNote, setLookupNote] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [createdOrderNumber, setCreatedOrderNumber] = useState<number | null>(null);
 
   const isDeliveryOrPickup = orderType === 'delivery' || orderType === 'pickup';
 
-  // البحث السريع التلقائي عند كتابة رقم الهاتف
+  // رسوم التوصيل تأتي من المنطقة المختارة فقط (لا قيمة ثابتة)
+  // تغيير نوع الطلب يعيد حساب رسوم التوصيل من المنطقة المختارة
+  useEffect(() => {
+    if (selectedZone || customer) syncCustomer({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderType]);
+
+  const syncCustomer = (o: { phone?: string; name?: string; address?: string; zone?: DeliveryZone | null }) => {
+    const zone = o.zone === undefined ? selectedZone : o.zone;
+    setCustomer({
+      phone: o.phone ?? phoneInput,
+      name: o.name ?? nameInput,
+      address: o.address ?? addressInput,
+      delivery_zone_id: zone?.id,
+      delivery_zone: zone?.name,
+      delivery_fee: orderType === 'delivery' ? zone?.fee ?? 0 : 0,
+    });
+  };
+
+  // البحث التلقائي بمجرد كتابة الرقم: الاسم + العنوان بالتفصيل + المنطقة والرسوم
   const handlePhoneChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setPhoneInput(val);
-    if (val.length >= 10) {
-      const found = await customerService.findCustomerByPhone(val);
+    setLookupNote(null);
+    const digits = val.replace(/\s/g, '');
+    if (digits.length < 10) {
+      setSavedAddresses([]);
+      return;
+    }
+    try {
+      const found = await posService.findCustomerByPhone(digits);
       if (found) {
+        const def = found.addresses[0];
+        const zone: DeliveryZone | null =
+          def && def.zone_id && def.zone_name
+            ? { id: def.zone_id, name: def.zone_name, fee: Number(def.zone_fee) || 0, sort_order: 0, is_active: true }
+            : null;
         setNameInput(found.name);
-        setAddressInput(found.default_address || '');
-        setCustomer({
-          phone: found.phone,
-          name: found.name,
-          address: found.default_address,
-          delivery_fee: orderType === 'delivery' ? 20 : 0,
-        });
+        setAddressInput(def?.address || '');
+        setSelectedZone(zone);
+        setSavedAddresses(found.addresses);
+        setLookupNote(found.addresses.length > 1 ? `عميل مسجل، عنده ${found.addresses.length} عناوين` : 'عميل مسجل');
+        syncCustomer({ phone: digits, name: found.name, address: def?.address || '', zone });
       } else {
-        setNameInput('عميل جديد');
-        setCustomer({
-          phone: val,
-          name: 'عميل جديد',
-          address: addressInput,
-          delivery_fee: orderType === 'delivery' ? 20 : 0,
-        });
+        setSavedAddresses([]);
+        setLookupNote('عميل جديد');
+        syncCustomer({ phone: digits });
       }
-    } else {
-      setCustomer(null);
+    } catch (err: any) {
+      setLookupNote(`تعذر البحث عن العميل: ${err.message || ''}`);
     }
   };
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setNameInput(val);
-    setCustomer({
-      phone: phoneInput || customer?.phone || '',
-      name: val,
-      address: addressInput || customer?.address,
-      delivery_fee: orderType === 'delivery' ? 20 : 0,
-    });
+    setNameInput(e.target.value);
+    syncCustomer({ name: e.target.value });
   };
 
   const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setAddressInput(val);
-    setCustomer({
-      phone: phoneInput || customer?.phone || '',
-      name: nameInput || customer?.name || 'عميل',
-      address: val,
-      delivery_fee: orderType === 'delivery' ? 20 : 0,
-    });
+    setAddressInput(e.target.value);
+    syncCustomer({ address: e.target.value });
+  };
+
+  const pickZone = (zone: DeliveryZone) => {
+    setSelectedZone(zone);
+    setShowZoneSheet(false);
+    syncCustomer({ zone });
+  };
+
+  const pickSavedAddress = (a: CustomerLookup['addresses'][number]) => {
+    const zone: DeliveryZone | null =
+      a.zone_id && a.zone_name
+        ? { id: a.zone_id, name: a.zone_name, fee: Number(a.zone_fee) || 0, sort_order: 0, is_active: true }
+        : null;
+    setAddressInput(a.address);
+    setSelectedZone(zone);
+    syncCustomer({ address: a.address, zone });
   };
 
   const handleApplyDiscount = (type: 'percentage' | 'fixed') => {
@@ -141,6 +175,10 @@ export const CartBottomSection: React.FC = () => {
 
   const handleCheckout = async () => {
     if (items.length === 0) return;
+    if (orderType === 'delivery' && !selectedZone) {
+      setCheckoutError('اختار منطقة التوصيل قبل تأكيد الأوردر');
+      return;
+    }
     setIsSubmitting(true);
     setCheckoutError(null);
     try {
@@ -177,6 +215,8 @@ export const CartBottomSection: React.FC = () => {
         taxRate: 14,
         taxAmount,
         deliveryFee: orderType === 'delivery' ? deliveryFee : 0,
+        deliveryZoneId: orderType === 'delivery' ? selectedZone?.id : undefined,
+        deliveryZoneName: orderType === 'delivery' ? selectedZone?.name : undefined,
         total,
         items,
         payments: finalPayments,
@@ -192,6 +232,7 @@ export const CartBottomSection: React.FC = () => {
           customerName: nameInput || customer?.name,
           customerPhone: phoneInput || customer?.phone,
           address: addressInput || customer?.address,
+          zone: orderType === 'delivery' ? selectedZone?.name : undefined,
           subtotal,
           discount: discountAmount,
           tax: taxAmount,
@@ -219,6 +260,9 @@ export const CartBottomSection: React.FC = () => {
     setPhoneInput('');
     setNameInput('');
     setAddressInput('');
+    setSelectedZone(null);
+    setSavedAddresses([]);
+    setLookupNote(null);
     setCustomer(null);
   };
 
@@ -371,6 +415,36 @@ export const CartBottomSection: React.FC = () => {
               </div>
             </div>
 
+            {lookupNote && <p className="text-[11px] font-bold text-brand-700">{lookupNote}</p>}
+            {savedAddresses.length > 1 && (
+              <div className="flex flex-wrap gap-1">
+                {savedAddresses.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => pickSavedAddress(a)}
+                    className={`px-2 py-1 rounded-lg border text-[10px] font-bold cursor-pointer max-w-full truncate ${
+                      a.address === addressInput ? 'border-brand-700 bg-brand-50 text-brand-900' : 'border-line bg-surface text-ink-muted'
+                    }`}
+                  >
+                    {a.zone_name ? `${a.zone_name}: ` : ''}{a.address}
+                  </button>
+                ))}
+              </div>
+            )}
+            {orderType === 'delivery' && (
+              <button
+                type="button"
+                onClick={() => setShowZoneSheet(true)}
+                className={`w-full flex items-center justify-between rounded-lg border px-2.5 py-2 text-xs font-extrabold cursor-pointer transition-colors ${
+                  selectedZone ? 'border-brand-700 bg-brand-50 text-brand-900' : 'border-dashed border-brand-400 bg-surface text-brand-700'
+                }`}
+              >
+                <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{selectedZone ? selectedZone.name : 'اختار المنطقة *'}</span>
+                <span className="font-mono">{selectedZone ? formatCurrency(selectedZone.fee) : ''}</span>
+              </button>
+            )}
+
             {/* الحساب والدفع */}
             <div className="pt-2 border-t border-line space-y-1.5 text-xs">
               <div className="flex items-center justify-between text-ink-muted">
@@ -380,8 +454,8 @@ export const CartBottomSection: React.FC = () => {
 
               {orderType === 'delivery' && (
                 <div className="flex items-center justify-between text-ink-muted">
-                  <span>خدمة التوصيل:</span>
-                  <span className="font-mono text-ink font-bold">+{formatCurrency(deliveryFee || 20)}</span>
+                  <span>خدمة التوصيل{selectedZone ? ` (${selectedZone.name})` : ''}:</span>
+                  <span className="font-mono text-ink font-bold">{selectedZone ? `+${formatCurrency(deliveryFee)}` : 'اختار المنطقة'}</span>
                 </div>
               )}
 
@@ -520,6 +594,10 @@ export const CartBottomSection: React.FC = () => {
         </div>
       )}
 
+      {showZoneSheet && (
+        <ZonePickerSheet selectedId={selectedZone?.id} onSelect={pickZone} onClose={() => setShowZoneSheet(false)} />
+      )}
+
       {isSuccessModalOpen && receipt &&
         createPortal(
           <div className="thermal-print-root">
@@ -606,7 +684,7 @@ const CartItemCard: React.FC<{
         <div className="flex items-start justify-between font-black text-ink gap-1">
           <span className="leading-tight text-xs font-black truncate">
             {item.is_donut_box
-              ? `بوكس ${item.donut_pieces_count} قطع (${item.donut_type === 'mini' ? 'ميني' : item.donut_type === 'stuffed' ? 'حشو' : 'عادي'})`
+              ? donutBoxName(item.donut_pieces_count, item.donut_type)
               : `${item.item_name} ${item.size_name ? `(${item.size_name})` : ''}`}
           </span>
           <button

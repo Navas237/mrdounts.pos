@@ -19,7 +19,7 @@ export const demoOrders: OrderListItem[] = [
     total: 240,
     created_at: new Date(Date.now() - 18 * 60000).toISOString(),
     items: [
-      { id: 'demo-item-1', item_name: 'بوكس عادي', donut_type_name: 'عادي', pieces: 6, quantity: 1, unit_price: 120, extras_total: 0, line_total: 120, status: 'pending', was_modified: false,
+      { id: 'demo-item-1', item_name: 'بوكس 6 عادي', donut_type_name: 'عادي', pieces: 6, quantity: 1, unit_price: 120, extras_total: 0, line_total: 120, status: 'pending', was_modified: false,
         piece_details: [1, 2, 3, 4].map((n) => ({ piece_no: n, kind: 'topping_only' as const, filling: null, topping: 'شوكولاتة' })).concat([5, 6].map((n) => ({ piece_no: n, kind: 'topping_only' as const, filling: null, topping: 'لوتس' }))) },
       { id: 'demo-item-2', item_name: 'وافل كلاسيك', quantity: 1, unit_price: 50, extras_total: 10, line_total: 60, status: 'pending', was_modified: false, notes: 'صوص زيادة', options: [{ option_name: 'شوكولاتة' }, { option_name: 'موز' }] },
       { id: 'demo-item-3', item_name: 'قهوة', quantity: 2, unit_price: 30, extras_total: 0, line_total: 60, status: 'preparing', was_modified: false },
@@ -42,7 +42,7 @@ export const demoOrders: OrderListItem[] = [
     total: 150,
     created_at: new Date(Date.now() - 52 * 60000).toISOString(),
     items: [
-      { id: 'demo-item-4', item_name: 'بوكس ميني', donut_type_name: 'ميني', pieces: 12, quantity: 1, unit_price: 110, extras_total: 0, line_total: 110, status: 'ready', was_modified: false,
+      { id: 'demo-item-4', item_name: 'بوكس 12 ميني', donut_type_name: 'ميني', pieces: 12, quantity: 1, unit_price: 110, extras_total: 0, line_total: 110, status: 'ready', was_modified: false,
         piece_details: Array.from({ length: 12 }, (_, i) => ({ piece_no: i + 1, kind: 'topping_only' as const, filling: null, topping: i < 8 ? 'شوكولاتة' : 'سكر وقرفة' })) },
       { id: 'demo-item-5', item_name: 'ميلك شيك فراولة', quantity: 1, unit_price: 55, extras_total: 0, line_total: 55, status: 'ready', was_modified: false },
     ],
@@ -66,7 +66,7 @@ export const demoOrders: OrderListItem[] = [
     created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
     items: [
       { id: 'demo-item-6', item_name: 'وافل نوتيلا', quantity: 1, unit_price: 65, extras_total: 25, line_total: 90, status: 'ready', was_modified: true, options: [{ option_name: 'نوتيلا' }, { option_name: 'فراولة' }] },
-      { id: 'demo-item-7', item_name: 'بوكس محشي', donut_type_name: 'محشي', pieces: 4, quantity: 1, unit_price: 140, extras_total: 0, line_total: 140, status: 'ready', was_modified: false,
+      { id: 'demo-item-7', item_name: 'بوكس 4 محشي', donut_type_name: 'محشي', pieces: 4, quantity: 1, unit_price: 140, extras_total: 0, line_total: 140, status: 'ready', was_modified: false,
         piece_details: [
           { piece_no: 1, kind: 'stuffed' as const, filling: 'نوتيلا', topping: 'شوكولاتة' },
           { piece_no: 2, kind: 'stuffed' as const, filling: 'نوتيلا', topping: 'شوكولاتة' },
@@ -225,4 +225,26 @@ export const demoTargetOptions: Record<string, Array<{ option_name: string; role
   ],
   'demo-mi-2': [{ option_name: 'نوتيلا', role: null }, { option_name: 'مكسرات', role: null }],
   'demo-mi-3': [{ option_name: 'كراميل', role: null }, { option_name: 'فانيليا', role: null }],
+};
+
+export interface DemoZone { id: string; name: string; fee: number; sort_order: number; is_active: boolean }
+export const demoZones: DemoZone[] = [
+  { id: 'demo-zone-1', name: 'سيدي بشر', fee: 15, sort_order: 1, is_active: true },
+  { id: 'demo-zone-2', name: 'سموحة', fee: 20, sort_order: 2, is_active: true },
+  { id: 'demo-zone-3', name: 'ميامي', fee: 25, sort_order: 3, is_active: true },
+  { id: 'demo-zone-4', name: 'المنتزه', fee: 30, sort_order: 4, is_active: true },
+  { id: 'demo-zone-5', name: 'العجمي', fee: 40, sort_order: 5, is_active: true },
+  { id: 'demo-zone-6', name: 'سان ستيفانو', fee: 35, sort_order: 6, is_active: true },
+  { id: 'demo-zone-7', name: 'كفر عبده', fee: 25, sort_order: 7, is_active: true },
+  { id: 'demo-zone-8', name: 'محطة الرمل', fee: 30, sort_order: 8, is_active: true },
+];
+
+export const demoCustomerByPhone: Record<string, any> = {
+  '01000000000': {
+    id: 'demo-cust-1', name: 'منى', phone: '01000000000',
+    addresses: [
+      { id: 'demo-addr-1', label: null, address: '12 شارع الجمهورية، برج النور، الدور 4 شقة 8، أمام صيدلية العزبي', landmark: null, is_default: true, zone_id: 'demo-zone-1', zone_name: 'سيدي بشر', zone_fee: 15 },
+      { id: 'demo-addr-2', label: null, address: '5 شارع سموحة الرئيسي، عمارة 3 شقة 2', landmark: null, is_default: false, zone_id: 'demo-zone-2', zone_name: 'سموحة', zone_fee: 20 },
+    ],
+  },
 };

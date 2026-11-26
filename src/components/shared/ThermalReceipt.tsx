@@ -1,4 +1,5 @@
 import React from 'react';
+import { donutBoxName } from '@/utils/boxName';
 import type { CartItem, SplitPaymentItem } from '@/types/order';
 import type { OrderListItem } from '@/services/pos.service';
 
@@ -101,6 +102,7 @@ export function receiptFromCart(args: {
   customerName?: string;
   customerPhone?: string;
   address?: string;
+  zone?: string;
   subtotal: number;
   discount: number;
   tax: number;
@@ -116,10 +118,9 @@ export function receiptFromCart(args: {
     customer_name: args.customerName,
     customer_phone: args.customerPhone,
     address: args.address,
+    zone: args.zone,
     items: args.items.map((it) => ({
-      name:
-        it.item_name ||
-        (it.is_donut_box ? `بوكس دونتس (${it.donut_pieces_count || 0} قطعة)` : 'صنف'),
+      name: it.is_donut_box ? donutBoxName(it.donut_pieces_count, it.donut_type) : it.item_name || 'صنف',
       size: it.size_name,
       qty: it.quantity,
       unit_price: it.unit_price,
@@ -158,7 +159,7 @@ export function receiptFromOrder(o: OrderListItem, branch: ReceiptData['branch']
     items: (o.items || [])
       .filter((i) => i.status !== 'cancelled')
       .map((i: any) => ({
-        name: i.item_name,
+        name: i.pieces && i.donut_type_name ? donutBoxName(i.pieces, i.donut_type_name) : i.item_name,
         size: i.size_name,
         qty: i.quantity,
         unit_price: i.unit_price,
@@ -269,7 +270,7 @@ export const ThermalReceiptDoc: React.FC<{ data: ReceiptData }> = ({ data }) => 
       <Row name="المجموع" value={money(data.subtotal)} />
       {Number(data.discount) > 0 && <Row name="الخصم" value={money(data.discount)} />}
       {Number(data.tax) > 0 && <Row name="الضريبة" value={money(data.tax)} />}
-      {isDelivery && <Row name="خدمة التوصيل" value={money(data.delivery_fee)} />}
+      {isDelivery && <Row name={data.zone ? `خدمة التوصيل (${data.zone})` : 'خدمة التوصيل'} value={money(data.delivery_fee)} />}
       <div className="tp-grand tp-row">
         <span>{isDelivery ? 'المطلوب من العميل' : 'الإجمالي'}</span>
         <span className="tp-num">{money(data.total)}</span>
