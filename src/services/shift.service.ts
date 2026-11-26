@@ -332,14 +332,16 @@ export const shiftService = {
       const amt = Number(p.amount) || 0;
       const method = (p.method_name || '').toLowerCase();
 
-      if (p.is_cash || method.includes('كاش') || method.includes('نقد')) {
+      // فودافون كاش محفظة وليست نقدية الدرج: النقدي بعلامة is_cash أو اسم «نقدي» فقط
+      const isWallet = method.includes('فودافون') || method.includes('محفظ') || method.includes('wallet');
+      if (!isWallet && (p.is_cash || method.includes('نقد'))) {
         cashAmount += amt;
         summary.cash_sales += amt;
       } else if (method.includes('فيزا') || method.includes('card') || method.includes('بطاق')) {
         summary.card_sales += amt;
-      } else if (method.includes('محفظ') || method.includes('wallet')) {
+      } else if (isWallet) {
         summary.wallet_sales += amt;
-      } else if (method.includes('انستاباي') || method.includes('instapay')) {
+      } else if (/[اإ]نستاباي/.test(method) || method.includes('instapay')) {
         summary.instapay_sales += amt;
       } else {
         summary.card_sales += amt;
@@ -390,10 +392,10 @@ export const shiftService = {
             )
             .reduce((sum, m) => sum + Number(m.total || 0), 0);
           const walletSales = methods
-            .filter((m) => m.method?.includes('كاش') || m.method?.includes('محفظة'))
+            .filter((m) => !m.is_cash && (m.method?.includes('فودافون') || m.method?.includes('محفظ')))
             .reduce((sum, m) => sum + Number(m.total || 0), 0);
           const instapaySales = methods
-            .filter((m) => m.method?.includes('انستاباي') || m.method?.includes('instapay'))
+            .filter((m) => /[اإ]نستاباي/.test(m.method || '') || m.method?.toLowerCase().includes('instapay'))
             .reduce((sum, m) => sum + Number(m.total || 0), 0);
           const salesTotal = methods.reduce((sum, m) => sum + Number(m.total || 0), 0);
 

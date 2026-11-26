@@ -118,9 +118,10 @@ export const demoItemSales = {
 };
 
 export const demoPaymentMethods = [
-  { id: 'demo-pm-1', name: 'كاش', is_cash: true, sort_order: 1, is_active: true },
+  { id: 'demo-pm-1', name: 'نقدي', is_cash: true, sort_order: 1, is_active: true },
   { id: 'demo-pm-2', name: 'فيزا', is_cash: false, sort_order: 2, is_active: true },
   { id: 'demo-pm-3', name: 'إنستاباي', is_cash: false, sort_order: 3, is_active: true },
+  { id: 'demo-pm-4', name: 'فودافون كاش', is_cash: false, sort_order: 4, is_active: true },
 ];
 
 // الاستهلاك محسوب من الرسبي التجريبي أدناه × الصوص المختار فعلياً لكل قطعة/صنف:

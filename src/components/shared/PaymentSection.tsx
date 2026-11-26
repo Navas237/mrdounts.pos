@@ -7,10 +7,10 @@ import { Banknote, CreditCard, Plus, X, Wallet } from 'lucide-react';
 
 // طرق دفع احتياطية للوضع المحلي (بدون اتصال قاعدة البيانات)
 const LOCAL_METHODS: PaymentMethod[] = [
-  { id: 'local-cash', name: 'نقدي (كاش)', is_cash: true, sort_order: 1, is_active: true },
-  { id: 'local-visa', name: 'فيزا / بطاقة', is_cash: false, sort_order: 2, is_active: true },
+  { id: 'local-cash', name: 'نقدي', is_cash: true, sort_order: 1, is_active: true },
+  { id: 'local-visa', name: 'فيزا', is_cash: false, sort_order: 2, is_active: true },
   { id: 'local-instapay', name: 'إنستاباي', is_cash: false, sort_order: 3, is_active: true },
-  { id: 'local-wallet', name: 'محفظة إلكترونية', is_cash: false, sort_order: 4, is_active: true },
+  { id: 'local-vodafone', name: 'فودافون كاش', is_cash: false, sort_order: 4, is_active: true },
 ];
 
 export const PaymentSection: React.FC = () => {
