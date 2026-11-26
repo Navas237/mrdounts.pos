@@ -10,7 +10,7 @@ import {
 
 export const DonutsInjectionKitchen: React.FC = () => {
   const { isPaused, pausedAt, togglePause } = useStationPause('donut_injection');
-  const { injectionData, isLoading, toggleSauce } = useDonutInjection(pausedAt);
+  const { injectionData, isLoading, isError, refetch, toggleSauce } = useDonutInjection(pausedAt);
 
   const [selectedSizeFilter, setSelectedSizeFilter] = useState<'all' | 'regular' | 'mini' | 'stuffed'>('all');
 
@@ -18,6 +18,23 @@ export const DonutsInjectionKitchen: React.FC = () => {
     return (
       <div className="py-20 text-center text-xs font-bold text-ink-muted">
         جاري تحميل بيانات محطة الحقن...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="py-20 text-center space-y-3">
+        <p className="text-xs font-bold text-red-600">
+          تعذر تحميل بيانات محطة الحقن. تحقق من الاتصال بالسيرفر.
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-colors cursor-pointer"
+        >
+          إعادة المحاولة
+        </button>
       </div>
     );
   }

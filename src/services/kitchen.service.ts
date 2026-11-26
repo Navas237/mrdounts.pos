@@ -436,8 +436,9 @@ export const kitchenService = {
   // ========================================================
   async getDonutToppingOrders(): Promise<DonutToppingOrder[]> {
     if (isLiveSupabaseConfigured && supabase) {
-      try {
-        const { data: orders, error } = await supabase
+      // على الاتصال الحقيقي: الخطأ يظهر للمستخدم (مع زر إعادة المحاولة) بدل ما
+      // نرجع بيانات وهمية فاضية، والنتيجة الفاضية الحقيقية تفضل فاضية.
+      const { data: orders, error } = await supabase
           .from('orders')
           .select(`
             id,
@@ -470,7 +471,11 @@ export const kitchenService = {
           .eq('status', 'active')
           .order('created_at', { ascending: true });
 
-        if (!error && orders && orders.length > 0) {
+        if (error) {
+          console.error('Failed to fetch donut topping orders from Supabase:', error);
+          throw new Error(error.message);
+        }
+        {
           const donutOrders: DonutToppingOrder[] = [];
 
           orders.forEach((ord: any) => {
@@ -526,9 +531,6 @@ export const kitchenService = {
 
           return donutOrders;
         }
-      } catch (err) {
-        console.warn('Failed to fetch donut topping orders from Supabase:', err);
-      }
     }
 
     return mockDonutToppingOrdersState.filter((o) => o.status !== 'ready');

@@ -103,7 +103,7 @@ export function useDonutTopping() {
   const queryClient = useQueryClient();
   const queryKey = ['kitchen', 'donutTopping'];
 
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading, isError, refetch } = useQuery({
     queryKey,
     queryFn: () => kitchenService.getDonutToppingOrders(),
     refetchInterval: 15000,
@@ -142,6 +142,8 @@ export function useDonutTopping() {
   return {
     orders,
     isLoading,
+    isError,
+    refetch,
     toggleBoxReady: (orderId: string, boxId: string) =>
       toggleBoxMutation.mutateAsync({ orderId, boxId }),
     finishOrder: finishOrderMutation.mutateAsync,
@@ -153,7 +155,7 @@ export function useDonutInjection(pausedAt?: string | null) {
   const queryClient = useQueryClient();
   const queryKey = ['kitchen', 'donutInjection', pausedAt || 'active'];
 
-  const { data: injectionData, isLoading } = useQuery({
+  const { data: injectionData, isLoading, isError, refetch } = useQuery({
     queryKey,
     queryFn: () => kitchenService.getDonutInjectionData(pausedAt),
     refetchInterval: 15000,
@@ -195,6 +197,8 @@ export function useDonutInjection(pausedAt?: string | null) {
       orders: [],
     },
     isLoading,
+    isError,
+    refetch,
     toggleSauce: toggleSauceMutation.mutateAsync,
     toggleOrder: toggleOrderMutation.mutateAsync,
   };

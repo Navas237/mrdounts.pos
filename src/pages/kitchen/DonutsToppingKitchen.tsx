@@ -15,7 +15,7 @@ import {
 import { DonutToppingBox, DonutToppingOrder } from '@/services/kitchen.service';
 
 export const DonutsToppingKitchen: React.FC = () => {
-  const { orders, isLoading, toggleBoxReady, finishOrder, isFinishing } = useDonutTopping();
+  const { orders, isLoading, isError, refetch, toggleBoxReady, finishOrder, isFinishing } = useDonutTopping();
   const { isPaused, pausedAt, togglePause } = useStationPause('donut_topping');
 
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>('all');
@@ -25,6 +25,23 @@ export const DonutsToppingKitchen: React.FC = () => {
     return (
       <div className="py-20 text-center text-xs font-bold text-ink-muted">
         جاري تحميل أوردرات محطة التوبنج...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="py-20 text-center space-y-3">
+        <p className="text-xs font-bold text-red-600">
+          تعذر تحميل أوردرات محطة التوبنج. تحقق من الاتصال بالسيرفر.
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="px-4 py-2 rounded-lg bg-brand-700 hover:bg-brand-800 text-white text-xs font-bold transition-colors cursor-pointer"
+        >
+          إعادة المحاولة
+        </button>
       </div>
     );
   }
