@@ -125,7 +125,46 @@ export interface CustomerLookup {
   addresses: Array<{ id: string; label?: string | null; address: string; landmark?: string | null; is_default: boolean; zone_id: string | null; zone_name: string | null; zone_fee: number | null }>;
 }
 
+export interface ReceiptSettings {
+  logo_url: string | null;
+  show_logo: boolean;
+  logo_width_mm: number;
+  brand_name: string | null;
+  /** null = اعرض عنوان وتليفون الفرع تلقائي */
+  header_lines: string[] | null;
+  footer_lines: string[];
+  delivery_footer_lines: string[];
+  branch?: { name?: string | null; address?: string | null; phone?: string | null };
+}
+export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
+  logo_url: null, show_logo: true, logo_width_mm: 30, brand_name: null, header_lines: null,
+  footer_lines: ['شكراً لزيارتكم'], delivery_footer_lines: ['نتمنى لكم وجبة سعيدة'],
+};
+let demoReceiptSettings: ReceiptSettings = { ...DEFAULT_RECEIPT_SETTINGS };
+
 export const posService = {
+  // ---------------- إعدادات الإيصال (RPC) ----------------
+  async getReceiptSettings(): Promise<ReceiptSettings> {
+    if (isPosDemoMode) return { ...demoReceiptSettings };
+    const client = ensureLive();
+    const { data, error } = await client.rpc('get_receipt_settings');
+    if (error) throw new Error(error.message);
+    return data as ReceiptSettings;
+  },
+  async saveReceiptSettings(st: ReceiptSettings): Promise<ReceiptSettings> {
+    if (isPosDemoMode) { demoReceiptSettings = { ...st }; return { ...st }; }
+    const client = ensureLive();
+    const { data, error } = await client.rpc('save_receipt_settings', {
+      p: {
+        logo_url: st.logo_url, show_logo: st.show_logo, logo_width_mm: st.logo_width_mm,
+        brand_name: st.brand_name, header_lines: st.header_lines,
+        footer_lines: st.footer_lines, delivery_footer_lines: st.delivery_footer_lines,
+      },
+    });
+    if (error) throw new Error(error.message);
+    return data as ReceiptSettings;
+  },
+
   // ---------------- مناطق التوصيل + بحث العميل (RPC) ----------------
   async listDeliveryZones(includeInactive = false): Promise<DeliveryZone[]> {
     if (isPosDemoMode) return demoZones.filter((z) => includeInactive || z.is_active).map((z) => ({ ...z }));

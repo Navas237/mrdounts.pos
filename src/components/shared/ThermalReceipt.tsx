@@ -1,7 +1,7 @@
 import React from 'react';
 import { donutBoxName } from '@/utils/boxName';
 import type { CartItem, SplitPaymentItem } from '@/types/order';
-import type { OrderListItem } from '@/services/pos.service';
+import type { OrderListItem, ReceiptSettings } from '@/services/pos.service';
 import { menuService } from '@/services/menu.service';
 import { addExtra, reconcileExtras, type ExtraLine } from '@/utils/receiptExtras';
 
@@ -212,7 +212,7 @@ const Row: React.FC<{ name: React.ReactNode; value: React.ReactNode; bold?: bool
   </div>
 );
 
-export const ThermalReceiptDoc: React.FC<{ data: ReceiptData }> = ({ data }) => {
+export const ThermalReceiptDoc: React.FC<{ data: ReceiptData; settings?: ReceiptSettings | null }> = ({ data, settings }) => {
   const type = data.order_type;
   const isDelivery = type === 'delivery';
   const paid = data.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -224,9 +224,23 @@ export const ThermalReceiptDoc: React.FC<{ data: ReceiptData }> = ({ data }) => 
   return (
     <div className="tp-doc" dir="rtl">
       <div className="tp-center">
-        <div className="tp-brand">{data.branch.name || 'MR DONUTS'}</div>
-        {data.branch.address && <div className="tp-small">{data.branch.address}</div>}
-        {data.branch.phone && <div className="tp-small">تليفون: {data.branch.phone}</div>}
+        {settings?.show_logo !== false && settings?.logo_url && (
+          <img
+            src={settings.logo_url}
+            alt=""
+            className="tp-logo"
+            style={{ width: `${settings.logo_width_mm || 30}mm` }}
+          />
+        )}
+        <div className="tp-brand">{settings?.brand_name || data.branch.name || 'MR DONUTS'}</div>
+        {settings?.header_lines
+          ? settings.header_lines.filter((l) => l.trim()).map((l, i) => <div key={i} className="tp-small">{l}</div>)
+          : (
+            <>
+              {data.branch.address && <div className="tp-small">{data.branch.address}</div>}
+              {data.branch.phone && <div className="tp-small">تليفون: {data.branch.phone}</div>}
+            </>
+          )}
       </div>
       <div className="tp-sep" />
 
@@ -311,8 +325,13 @@ export const ThermalReceiptDoc: React.FC<{ data: ReceiptData }> = ({ data }) => 
         </>
       )}
       <div className="tp-sep" />
-      <div className="tp-center tp-small">شكراً لزيارتكم</div>
-      {isDelivery && <div className="tp-center tp-small">نتمنى لكم وجبة سعيدة</div>}
+      {(settings?.footer_lines ?? ['شكراً لزيارتكم']).filter((l) => l.trim()).map((l, i) => (
+        <div key={`f${i}`} className="tp-center tp-small">{l}</div>
+      ))}
+      {isDelivery &&
+        (settings?.delivery_footer_lines ?? ['نتمنى لكم وجبة سعيدة']).filter((l) => l.trim()).map((l, i) => (
+          <div key={`d${i}`} className="tp-center tp-small">{l}</div>
+        ))}
     </div>
   );
 };

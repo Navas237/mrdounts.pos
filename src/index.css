@@ -384,6 +384,7 @@ select {
   padding: 2mm 0;
 }
 .tp-center { text-align: center; }
+.tp-logo { display: block; margin: 0 auto 1mm; max-width: 100%; height: auto; filter: grayscale(1) contrast(1.4); }
 .tp-brand { font-size: 15px; font-weight: 800; letter-spacing: 1px; }
 .tp-title { font-size: 13px; font-weight: 800; margin-top: 0.5mm; }
 .tp-small { font-size: 9.5px; }

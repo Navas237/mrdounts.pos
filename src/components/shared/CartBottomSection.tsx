@@ -6,6 +6,7 @@ import { useAuthStore } from '@/hooks/useAuth';
 import { ThermalReceiptDoc, receiptFromCart, ReceiptData } from '@/components/shared/ThermalReceipt';
 import React, { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useReceiptSettings } from '@/hooks/useReceiptSettings';
 import { useCart } from '@/hooks/useCart';
 import { formatCurrency } from '@/utils/formatters';
 import { PaymentSection } from './PaymentSection';
@@ -75,6 +76,7 @@ export const CartBottomSection: React.FC = () => {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const branch = useAuthStore((st) => st.session?.branch);
+  const receiptSettings = useReceiptSettings();
   const [selectedZone, setSelectedZone] = useState<DeliveryZone | null>(null);
   const [showZoneSheet, setShowZoneSheet] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<CustomerLookup['addresses']>([]);
@@ -601,7 +603,7 @@ export const CartBottomSection: React.FC = () => {
       {isSuccessModalOpen && receipt &&
         createPortal(
           <div className="thermal-print-root">
-            <ThermalReceiptDoc data={receipt} />
+            <ThermalReceiptDoc data={receipt} settings={receiptSettings} />
           </div>,
           document.body,
         )}

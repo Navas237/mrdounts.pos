@@ -24,11 +24,13 @@ import {
   X,
   ChefHat,
   MapPin,
+  Receipt,
 } from 'lucide-react';
 import { PermissionGate } from '@/components/shared/PermissionGate';
 import { UsersManagement } from '@/components/admin/UsersManagement';
 import { SectionsMenuManagement } from '@/components/admin/SectionsMenuManagement';
 import { RecipesManagement } from '@/components/admin/RecipesManagement';
+import { ReceiptSettingsManagement } from '@/components/admin/ReceiptSettingsManagement';
 import { DeliveryZonesManagement } from '@/components/admin/DeliveryZonesManagement';
 import { PaymentMethodsManagement } from '@/components/admin/PaymentMethodsManagement';
 
@@ -37,6 +39,7 @@ const TABS = [
   { id: 'departments', label: 'الأقسام والمنيو', icon: UtensilsCrossed, perm: 'menu.manage' },
   { id: 'payments', label: 'طرق الدفع', icon: CreditCard, perm: 'settings.manage' },
   { id: 'zones', label: 'مناطق التوصيل', icon: MapPin, perm: 'settings.manage' },
+  { id: 'receipt', label: 'إعدادات الإيصال', icon: Receipt, perm: 'settings.manage' },
   { id: 'recipes', label: 'الرسبي', icon: ChefHat, perm: 'menu.manage' },
   { id: 'printers', label: 'طابعات الأقسام', icon: Printer, perm: 'print.manage' },
   { id: 'users', label: 'المستخدمون والصلاحيات', icon: Users, perm: 'users.manage' },
@@ -523,6 +526,7 @@ export const Admin: React.FC = () => {
             ======================================================== */}
         {activeTab === 'payments' && <PaymentMethodsManagement />}
         {activeTab === 'zones' && <DeliveryZonesManagement />}
+        {activeTab === 'receipt' && <ReceiptSettingsManagement />}
 
         {activeTab === 'recipes' && <RecipesManagement />}
 

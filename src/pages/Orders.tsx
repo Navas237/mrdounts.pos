@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuthStore } from '@/hooks/useAuth';
 import { ThermalReceiptDoc, receiptFromOrder } from '@/components/shared/ThermalReceipt';
+import { useReceiptSettings } from '@/hooks/useReceiptSettings';
 import { posService, isPosDemoMode, OrderListItem, PaymentMethod } from '@/services/pos.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatCurrency } from '@/utils/formatters';
@@ -79,6 +80,7 @@ export const Orders: React.FC = () => {
 
   const [receiptOrder, setReceiptOrder] = useState<OrderListItem | null>(null);
   const branch = useAuthStore((st) => st.session?.branch);
+  const receiptSettings = useReceiptSettings();
   // إيصال العميل: معاينة 80mm ثم طباعة من المتصفح (طابور print_jobs لسه بدون مستهلك)
   const handleReprintReceipt = (order: OrderListItem) => {
     setActionMessage(null);
@@ -254,6 +256,7 @@ export const Orders: React.FC = () => {
             <div className="bg-surface border border-line rounded-2xl p-4 max-h-[90vh] overflow-y-auto">
               <div className="bg-white rounded-lg border border-line mx-auto" style={{ width: '80mm', padding: '4mm' }}>
                 <ThermalReceiptDoc
+                  settings={receiptSettings}
                   data={receiptFromOrder(receiptOrder, {
                     name: branch?.name,
                     phone: branch?.phone,
@@ -283,6 +286,7 @@ export const Orders: React.FC = () => {
           {createPortal(
             <div className="thermal-print-root">
               <ThermalReceiptDoc
+                  settings={receiptSettings}
                 data={receiptFromOrder(receiptOrder, {
                   name: branch?.name,
                   phone: branch?.phone,
