@@ -1,3 +1,4 @@
+import { paymentBucket } from '@/utils/paymentBuckets';
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
 import { Shift, CashMovement, CashKind, ShiftSummaryReport } from '@/types/database';
 import { authService } from './auth.service';
@@ -330,18 +331,14 @@ export const shiftService = {
     let cashAmount = 0;
     (params.payments || []).forEach((p) => {
       const amt = Number(p.amount) || 0;
-      const method = (p.method_name || '').toLowerCase();
 
-      // فودافون كاش محفظة وليست نقدية الدرج: النقدي بعلامة is_cash أو اسم «نقدي» فقط
-      const isWallet = method.includes('فودافون') || method.includes('محفظ') || method.includes('wallet');
-      if (!isWallet && (p.is_cash || method.includes('نقد'))) {
+      const bucket = paymentBucket(p.method_name, p.is_cash);
+      if (bucket === 'cash') {
         cashAmount += amt;
         summary.cash_sales += amt;
-      } else if (method.includes('فيزا') || method.includes('card') || method.includes('بطاق')) {
-        summary.card_sales += amt;
-      } else if (isWallet) {
+      } else if (bucket === 'wallet') {
         summary.wallet_sales += amt;
-      } else if (/[اإ]نستاباي/.test(method) || method.includes('instapay')) {
+      } else if (bucket === 'instapay') {
         summary.instapay_sales += amt;
       } else {
         summary.card_sales += amt;
@@ -381,22 +378,14 @@ export const shiftService = {
         if (!error && data) {
           const methods: Array<{ method: string; is_cash: boolean; total: number }> =
             data.payments_by_method || [];
-          const cashSales = methods
-            .filter((m) => m.is_cash)
-            .reduce((sum, m) => sum + Number(m.total || 0), 0);
-          const cardSales = methods
-            .filter(
-              (m) =>
-                m.method?.toLowerCase().includes('فيزا') ||
-                m.method?.toLowerCase().includes('card')
-            )
-            .reduce((sum, m) => sum + Number(m.total || 0), 0);
-          const walletSales = methods
-            .filter((m) => !m.is_cash && (m.method?.includes('فودافون') || m.method?.includes('محفظ')))
-            .reduce((sum, m) => sum + Number(m.total || 0), 0);
-          const instapaySales = methods
-            .filter((m) => /[اإ]نستاباي/.test(m.method || '') || m.method?.toLowerCase().includes('instapay'))
-            .reduce((sum, m) => sum + Number(m.total || 0), 0);
+          const sumBy = (b: string) =>
+            methods
+              .filter((m) => paymentBucket(m.method, m.is_cash) === b)
+              .reduce((sum, m) => sum + Number(m.total || 0), 0);
+          const cashSales = sumBy('cash');
+          const cardSales = sumBy('card');
+          const walletSales = sumBy('wallet');
+          const instapaySales = sumBy('instapay');
           const salesTotal = methods.reduce((sum, m) => sum + Number(m.total || 0), 0);
 
           const openingCash = Number(data.opening_cash) || 0;
