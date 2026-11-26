@@ -184,17 +184,21 @@ export const pickupService = {
 
   async deliverOrder(orderId: string): Promise<void> {
     if (isLiveSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase.rpc('deliver_order', { p_order: orderId });
-        if (error) {
-          await supabase
-            .from('orders')
-            .update({ status: 'delivered', updated_at: new Date().toISOString() })
-            .eq('id', orderId);
-        }
-      } catch (err) {
-        console.warn('Supabase deliverOrder error:', err);
+      // التسليم يتم فقط عبر deliver_order على السيرفر: يفرض صلاحية order.deliver،
+      // يمنع التسليم قبل اكتمال كل الأصناف (ITEMS_NOT_READY)، ويسجّل delivered_by
+      // و order_events. لا يوجد تحديث مباشر احتياطي: أي رفض من السيرفر يفشل
+      // ظاهراً ويبقى الأوردر في شاشة الانتظار.
+      const { error } = await supabase.rpc('deliver_order', { p_order: orderId });
+      if (error) {
+        console.error('Supabase deliverOrder failed:', error);
+        throw new Error(error.message);
       }
+      const liveList = loadPickupOrders();
+      savePickupOrders(liveList.filter((o) => o.id !== orderId && (o as any).order_id !== orderId));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mrdonuts:pickup-updated'));
+      }
+      return;
     }
 
     const list = loadPickupOrders();
@@ -208,17 +212,18 @@ export const pickupService = {
 
   async cancelOrder(orderId: string, reason = ''): Promise<void> {
     if (isLiveSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase.rpc('cancel_order', { p_order: orderId, p_reason: reason });
-        if (error) {
-          await supabase
-            .from('orders')
-            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-            .eq('id', orderId);
-        }
-      } catch (err) {
-        console.warn('Supabase cancelOrder error:', err);
+      // نفس مبدأ التسليم: الإلغاء عبر cancel_order فقط، بدون تحديث مباشر احتياطي.
+      const { error } = await supabase.rpc('cancel_order', { p_order: orderId, p_reason: reason });
+      if (error) {
+        console.error('Supabase cancelOrder failed:', error);
+        throw new Error(error.message);
       }
+      const liveList = loadPickupOrders();
+      savePickupOrders(liveList.filter((o) => o.id !== orderId && (o as any).order_id !== orderId));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mrdonuts:pickup-updated'));
+      }
+      return;
     }
 
     const list = loadPickupOrders();

@@ -5,7 +5,7 @@ import { PackageCheck, Check, Clock, MapPin } from 'lucide-react';
 import { PermissionGate } from '@/components/shared/PermissionGate';
 
 export const Pickup: React.FC = () => {
-  const { orders, isLoading, deliverOrder, isDelivering } = usePickup();
+  const { orders, isLoading, deliverOrder, deliverError, resetDeliverError, isDelivering } = usePickup();
 
   if (isLoading) {
     return <div className="p-8 text-center text-xs text-ink-muted">جاري تحميل أوردرات محطة التجميع...</div>;
@@ -33,6 +33,14 @@ export const Pickup: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* فشل التسليم يظهر هنا ويبقى الأوردر في القائمة */}
+      {deliverError && (
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-bold">
+          <span>تعذر تسليم الأوردر: {deliverError.message}</span>
+          <button type="button" onClick={resetDeliverError} className="shrink-0 underline">إخفاء</button>
+        </div>
+      )}
 
       {/* بطاقات تجميع الأوردرات عالية الكثافة */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">

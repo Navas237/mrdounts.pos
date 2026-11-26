@@ -32,12 +32,19 @@ export function usePickup() {
       );
       queryClient.invalidateQueries({ queryKey });
     },
+    onError: () => {
+      // فشل التسليم: أعد جلب الحالة الحقيقية فوراً حتى يرجع الأوردر لحالة الانتظار
+      queryClient.invalidateQueries({ queryKey });
+    },
   });
 
   return {
     orders,
     isLoading,
-    deliverOrder: deliverMutation.mutateAsync,
+    // mutate وليس mutateAsync: فشل التسليم يظهر في deliverError بدل وعد مرفوض بلا معالج
+    deliverOrder: (orderId: string) => deliverMutation.mutate(orderId),
+    deliverError: deliverMutation.error,
+    resetDeliverError: () => deliverMutation.reset(),
     isDelivering: deliverMutation.isPending,
   };
 }
