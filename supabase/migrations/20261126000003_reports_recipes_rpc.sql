@@ -60,6 +60,13 @@ begin
               join public.orders o on o.id = p.order_id and o.status <> 'cancelled'
              where p.shift_id = p_shift
              group by p.method_name, p.is_cash) t), '[]'::jsonb),
+    'cash_change', coalesce((select sum(o.change_amount) from public.orders o
+             where o.shift_id = p_shift and o.status <> 'cancelled'), 0),
+    'net_cash', coalesce((select sum(p.amount) from public.payments p
+             join public.orders o on o.id = p.order_id and o.status <> 'cancelled'
+             where p.shift_id = p_shift and p.is_cash), 0)
+           - coalesce((select sum(o.change_amount) from public.orders o
+             where o.shift_id = p_shift and o.status <> 'cancelled'), 0),
     'movements_in', coalesce((select sum(amount) from public.cash_movements where shift_id = p_shift and direction = 'in'), 0),
     'movements_out', coalesce((select sum(amount) from public.cash_movements where shift_id = p_shift and direction = 'out'), 0),
     'expected_cash', v_shift.expected_cash,

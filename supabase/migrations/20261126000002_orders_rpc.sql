@@ -25,7 +25,10 @@ declare
   v_donut_type_id uuid;
   v_box_size_id uuid;
   v_req text := nullif(p_payload->>'client_request_id','');
+  v_hash text := md5(coalesce(p_payload->'items','[]'::jsonb)::text || coalesce(p_payload->'payments','[]'::jsonb)::text);
+  v_existing_hash text;
   v_noncash numeric(12,2);
+  v_change numeric(12,2);
 begin
   if v_branch is null or not public.auth_has_perm('order.create') then
     raise exception 'NOT_ALLOWED: إنشاء الأوردر';
@@ -37,10 +40,14 @@ begin
 
   -- منع البيع المكرر: نفس مفتاح الطلب يرجع نفس الأوردر (إعادة إرسال/شبكة)
   if v_req is not null then
-    select o.id, o.order_number, o.total into v_order_id, v_order_number, v_total
+    select o.id, o.order_number, o.total, o.client_request_hash
+      into v_order_id, v_order_number, v_total, v_existing_hash
       from public.orders o
      where o.branch_id = v_branch and o.client_request_id = v_req;
     if found then
+      if v_existing_hash is distinct from v_hash then
+        raise exception 'REQUEST_KEY_CONFLICT: مفتاح الطلب استُخدم بمحتوى مختلف';
+      end if;
       select coalesce(sum(p.amount), 0) into v_paid from public.payments p where p.order_id = v_order_id;
       return jsonb_build_object('id', v_order_id, 'order_number', v_order_number,
                                 'total', v_total, 'paid', v_paid, 'duplicate', true);
@@ -52,7 +59,7 @@ begin
     insert into public.orders (
       branch_id, order_type, customer_name, customer_phone, address_snapshot,
       delivery_zone_id, delivery_zone_name, delivery_fee,
-      discount_type, discount_value, notes, client_request_id)
+      discount_type, discount_value, notes, client_request_id, client_request_hash)
     values (
       v_branch,
       (p_payload->>'order_type')::public.order_type,
@@ -65,14 +72,18 @@ begin
       nullif(p_payload->>'discount_type','')::public.discount_type,
       coalesce((p_payload->>'discount_value')::numeric, 0),
       nullif(p_payload->>'notes',''),
-      v_req)
+      v_req, v_hash)
     returning id into v_order_id;
   exception when unique_violation then
     -- سباق متزامن على نفس المفتاح: طلب آخر سجّله أولاً، نرجع نفس الأوردر
     if v_req is null then raise; end if;
-    select o.id, o.order_number, o.total into v_order_id, v_order_number, v_total
+    select o.id, o.order_number, o.total, o.client_request_hash
+      into v_order_id, v_order_number, v_total, v_existing_hash
       from public.orders o
      where o.branch_id = v_branch and o.client_request_id = v_req;
+    if v_existing_hash is distinct from v_hash then
+      raise exception 'REQUEST_KEY_CONFLICT: مفتاح الطلب استُخدم بمحتوى مختلف';
+    end if;
     select coalesce(sum(p.amount), 0) into v_paid from public.payments p where p.order_id = v_order_id;
     return jsonb_build_object('id', v_order_id, 'order_number', v_order_number,
                               'total', v_total, 'paid', v_paid, 'duplicate', true);
@@ -86,11 +97,12 @@ begin
       select id into v_donut_type_id from public.donut_types
        where branch_id = v_branch and name = v_item->>'donut_type_name' limit 1;
     end if;
+    -- أحجام البوكسات موحدة لكل فرع بعدد القطع (migration 20261123000001)
     v_box_size_id := nullif(v_item->>'box_size_id','')::uuid;
-    if v_box_size_id is null and v_donut_type_id is not null and nullif(v_item->>'pieces','') is not null then
+    if v_box_size_id is null and nullif(v_item->>'pieces','') is not null then
       select id into v_box_size_id from public.donut_box_sizes
-       where branch_id = v_branch and donut_type_id = v_donut_type_id
-         and pieces = (v_item->>'pieces')::int limit 1;
+       where branch_id = v_branch and pieces = (v_item->>'pieces')::int
+       order by id limit 1;
     end if;
 
     insert into public.order_items (
@@ -188,8 +200,13 @@ begin
     raise exception 'NO_PAYMENT: الأوردر بدون دفع';
   end if;
 
+  -- الباقي للعميل (كاش فقط، وقد منعنا تجاوز الإلكتروني أعلاه)
+  v_change := greatest(v_paid - v_total, 0);
+  update public.orders set change_amount = v_change where id = v_order_id;
+
   select order_number into v_order_number from public.orders where id = v_order_id;
-  return jsonb_build_object('id', v_order_id, 'order_number', v_order_number, 'total', v_total, 'paid', v_paid);
+  return jsonb_build_object('id', v_order_id, 'order_number', v_order_number,
+                            'total', v_total, 'paid', v_paid, 'change', v_change);
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -380,6 +397,11 @@ begin
         nullif(v_pay->>'reference',''));
     end loop;
   end if;
+
+  -- إعادة حساب الباقي بعد التعديل
+  update public.orders o
+     set change_amount = greatest(coalesce((select sum(p.amount) from public.payments p where p.order_id = o.id), 0) - o.total, 0)
+   where o.id = p_order;
 
   insert into public.order_events (branch_id, order_id, event_type, payload, created_by)
   values (v_order.branch_id, p_order, 'order_edited',

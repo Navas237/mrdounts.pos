@@ -76,3 +76,11 @@ create policy recipe_ingredients_update on public.recipe_ingredients for update 
   with check (public.auth_can_access_branch(branch_id));
 create policy recipe_ingredients_delete on public.recipe_ingredients for delete to authenticated
   using (public.auth_can_access_branch(branch_id) and public.auth_has_perm('menu.manage'));
+
+-- مفتاح منع تكرار الأوردر + بصمة المحتوى + الباقي للعميل (يستخدمها create_order_full)
+alter table public.orders add column if not exists client_request_id text;
+alter table public.orders add column if not exists client_request_hash text;
+alter table public.orders add column if not exists change_amount numeric(12,2) not null default 0 check (change_amount >= 0);
+create unique index if not exists orders_client_request_uidx
+  on public.orders (branch_id, client_request_id)
+  where client_request_id is not null;
