@@ -464,7 +464,10 @@ export const kitchenService = {
               )
             )
           `)
-          .in('status', ['active', 'preparing'])
+          // order_status enum = ('active','delivered','cancelled'); 'preparing' is an
+          // ITEM status, and sending it here makes PostgREST reject the whole query
+          // (22P02), so both donut screens silently fell back to empty mock data.
+          .eq('status', 'active')
           .order('created_at', { ascending: true });
 
         if (!error && orders && orders.length > 0) {
@@ -532,6 +535,32 @@ export const kitchenService = {
   },
 
   async toggleBoxReady(orderId: string, boxId: string): Promise<void> {
+    if (isLiveSupabaseConfigured && supabase) {
+      try {
+        const { data: cur, error: readErr } = await supabase
+          .from('order_items')
+          .select('status')
+          .eq('id', boxId)
+          .maybeSingle();
+        if (readErr) throw readErr;
+        const makeReady = cur?.status !== 'ready';
+        const { error: updErr } = await supabase
+          .from('order_items')
+          .update(
+            makeReady
+              ? { status: 'ready', ready_at: new Date().toISOString() }
+              : { status: 'preparing', ready_at: null }
+          )
+          .eq('id', boxId);
+        if (updErr) throw updErr;
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('mrdonuts:kitchen-updated'));
+        }
+        return;
+      } catch (err) {
+        console.warn('Failed to toggle donut box readiness in Supabase:', err);
+      }
+    }
     mockDonutToppingOrdersState = mockDonutToppingOrdersState.map((ord) => {
       if (ord.order_id !== orderId && ord.id !== orderId) return ord;
 
