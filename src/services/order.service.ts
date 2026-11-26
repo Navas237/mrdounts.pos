@@ -1,4 +1,5 @@
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
+import { queryClient } from '@/lib/queryClient';
 import { CartItem, SplitPaymentItem, OrderType } from '@/types/order';
 import { kitchenService, DonutToppingBox } from './kitchen.service';
 import { pickupService, PickupDepartmentStatus } from './pickup.service';
@@ -52,9 +53,21 @@ export const orderService = {
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
 
       // حل معرفات الأقسام للأصناف القادمة من الوضع المحلي (مثل d-donuts)
-      const { data: branchDepts } = await supabase
-        .from('departments')
-        .select('id, name, behavior');
+      // الأقسام تتغير نادراً: تُجلب مرة وتُخزَّن في كاش react-query المشترك
+      // (مفتاح تحت ['menu', ...] حتى يُبطلها أي تعديل في الأقسام/المنيو)،
+      // بدل استعلام إضافي قبل كل حفظ أوردر.
+      const liveClient = supabase;
+      const branchDepts = await queryClient.fetchQuery({
+        queryKey: ['menu', 'departments-lookup'],
+        staleTime: 10 * 60 * 1000,
+        queryFn: async () => {
+          const { data, error } = await liveClient!
+            .from('departments')
+            .select('id, name, behavior');
+          if (error) throw new Error(error.message);
+          return data || [];
+        },
+      });
 
       const resolveDeptId = (item: CartItem): string => {
         if (isUuid(item.department_id)) return item.department_id;
