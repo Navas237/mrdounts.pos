@@ -18,7 +18,7 @@ export const Reports: React.FC = () => {
 
   const [shiftReport, setShiftReport] = useState<any>(null);
   const [salesReport, setSalesReport] = useState<any>(null);
-  const [sauceReport, setSauceReport] = useState<any[]>([]);
+  const [sauceReport, setSauceReport] = useState<any>(null);
 
   // تحميل الشفتات
   useEffect(() => {
@@ -256,13 +256,22 @@ export const Reports: React.FC = () => {
             <h3 className="font-extrabold text-sm text-ink border-b border-line pb-2">
               استهلاك الصوصات (محسوب من الرسبي × المبيعات)
             </h3>
-            {sauceReport.length === 0 ? (
+            {(sauceReport?.missing_recipes || []).length > 0 && (
+              <div className="p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-[11px] font-bold text-amber-900 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  التقرير ناقص: الأصناف التالية اتباعت وليست لها وصفة، فلم تدخل في الحساب —{' '}
+                  {(sauceReport.missing_recipes || []).join('، ')}. أضف وصفاتها من لوحة الإدارة — تبويب الرسبي.
+                </span>
+              </div>
+            )}
+            {(sauceReport?.consumption || []).length === 0 ? (
               <p className="text-[11px] text-ink-muted">
                 لا يوجد استهلاك محسوب. جهّز وصفات الأصناف من لوحة الإدارة — تبويب الرسبي.
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {sauceReport.map((s: any) => (
+                {(sauceReport.consumption || []).map((s: any) => (
                   <div key={s.ingredient} className="p-2.5 rounded-lg bg-surface-2/40 border border-line text-center">
                     <div className="text-xs font-bold text-ink">{s.ingredient}</div>
                     <div className="text-lg font-black text-brand-700 font-mono">

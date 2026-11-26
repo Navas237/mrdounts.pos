@@ -24,6 +24,8 @@ declare
   v_piece_id uuid;
   v_donut_type_id uuid;
   v_box_size_id uuid;
+  v_req text := nullif(p_payload->>'client_request_id','');
+  v_noncash numeric(12,2);
 begin
   if v_branch is null or not public.auth_has_perm('order.create') then
     raise exception 'NOT_ALLOWED: إنشاء الأوردر';
@@ -33,24 +35,48 @@ begin
     raise exception 'EMPTY_ORDER: الأوردر بدون أصناف';
   end if;
 
+  -- منع البيع المكرر: نفس مفتاح الطلب يرجع نفس الأوردر (إعادة إرسال/شبكة)
+  if v_req is not null then
+    select o.id, o.order_number, o.total into v_order_id, v_order_number, v_total
+      from public.orders o
+     where o.branch_id = v_branch and o.client_request_id = v_req;
+    if found then
+      select coalesce(sum(p.amount), 0) into v_paid from public.payments p where p.order_id = v_order_id;
+      return jsonb_build_object('id', v_order_id, 'order_number', v_order_number,
+                                'total', v_total, 'paid', v_paid, 'duplicate', true);
+    end if;
+  end if;
+
   -- الأوردر الرئيسي (التريجرات تملأ الشفت والرقم والضريبة والإجماليات)
-  insert into public.orders (
-    branch_id, order_type, customer_name, customer_phone, address_snapshot,
-    delivery_zone_id, delivery_zone_name, delivery_fee,
-    discount_type, discount_value, notes)
-  values (
-    v_branch,
-    (p_payload->>'order_type')::public.order_type,
-    nullif(p_payload->>'customer_name',''),
-    nullif(p_payload->>'customer_phone',''),
-    nullif(p_payload->'address_snapshot','null'::jsonb),
-    nullif(p_payload->>'delivery_zone_id','')::uuid,
-    nullif(p_payload->>'delivery_zone_name',''),
-    coalesce((p_payload->>'delivery_fee')::numeric, 0),
-    nullif(p_payload->>'discount_type','')::public.discount_type,
-    coalesce((p_payload->>'discount_value')::numeric, 0),
-    nullif(p_payload->>'notes',''))
-  returning id into v_order_id;
+  begin
+    insert into public.orders (
+      branch_id, order_type, customer_name, customer_phone, address_snapshot,
+      delivery_zone_id, delivery_zone_name, delivery_fee,
+      discount_type, discount_value, notes, client_request_id)
+    values (
+      v_branch,
+      (p_payload->>'order_type')::public.order_type,
+      nullif(p_payload->>'customer_name',''),
+      nullif(p_payload->>'customer_phone',''),
+      nullif(p_payload->'address_snapshot','null'::jsonb),
+      nullif(p_payload->>'delivery_zone_id','')::uuid,
+      nullif(p_payload->>'delivery_zone_name',''),
+      coalesce((p_payload->>'delivery_fee')::numeric, 0),
+      nullif(p_payload->>'discount_type','')::public.discount_type,
+      coalesce((p_payload->>'discount_value')::numeric, 0),
+      nullif(p_payload->>'notes',''),
+      v_req)
+    returning id into v_order_id;
+  exception when unique_violation then
+    -- سباق متزامن على نفس المفتاح: طلب آخر سجّله أولاً، نرجع نفس الأوردر
+    if v_req is null then raise; end if;
+    select o.id, o.order_number, o.total into v_order_id, v_order_number, v_total
+      from public.orders o
+     where o.branch_id = v_branch and o.client_request_id = v_req;
+    select coalesce(sum(p.amount), 0) into v_paid from public.payments p where p.order_id = v_order_id;
+    return jsonb_build_object('id', v_order_id, 'order_number', v_order_number,
+                              'total', v_total, 'paid', v_paid, 'duplicate', true);
+  end;
 
   -- الأصناف
   for v_item in select * from jsonb_array_elements(p_payload->'items') loop
@@ -134,10 +160,17 @@ begin
 
   -- المدفوعات: مجموعها لازم يغطي الإجمالي (الزيادة = باقي للعميل)
   if jsonb_typeof(p_payload->'payments') = 'array' then
-    select coalesce(sum((p->>'amount')::numeric), 0) into v_paid
+    select coalesce(sum((p->>'amount')::numeric), 0),
+           coalesce(sum((p->>'amount')::numeric) filter (
+             where not coalesce((p->>'is_cash')::boolean, false)), 0)
+      into v_paid, v_noncash
       from jsonb_array_elements(p_payload->'payments') p;
     if v_paid + 0.01 < v_total then
       raise exception 'PAYMENT_SHORT: المدفوع (%) أقل من إجمالي الأوردر (%)', v_paid, v_total;
+    end if;
+    -- الزيادة عن الإجمالي = باقي للعميل، ولا تكون إلا كاش؛ الإلكتروني لا يتجاوز الإجمالي
+    if v_noncash > v_total + 0.01 then
+      raise exception 'OVERPAY_NONCASH: المدفوع إلكترونياً (%) أكبر من إجمالي الأوردر (%)', v_noncash, v_total;
     end if;
     for v_pay in select * from jsonb_array_elements(p_payload->'payments') loop
       insert into public.payments (
@@ -245,6 +278,7 @@ declare
   v_new_item_id uuid;
   v_pay jsonb;
   v_paid numeric(12,2);
+  v_noncash numeric(12,2);
 begin
   if not public.auth_has_perm('order.edit') then
     raise exception 'NOT_ALLOWED: تعديل الأوردر';
@@ -324,10 +358,16 @@ begin
   -- استبدال المدفوعات بالكامل لو أُرسلت
   if jsonb_typeof(p_changes->'payments') = 'array' then
     delete from public.payments where order_id = p_order;
-    select coalesce(sum((p->>'amount')::numeric), 0) into v_paid
+    select coalesce(sum((p->>'amount')::numeric), 0),
+           coalesce(sum((p->>'amount')::numeric) filter (
+             where not coalesce((p->>'is_cash')::boolean, false)), 0)
+      into v_paid, v_noncash
       from jsonb_array_elements(p_changes->'payments') p;
     if v_paid + 0.01 < (select total from public.orders where id = p_order) then
       raise exception 'PAYMENT_SHORT: المدفوع أقل من إجمالي الأوردر بعد التعديل';
+    end if;
+    if v_noncash > (select total from public.orders where id = p_order) + 0.01 then
+      raise exception 'OVERPAY_NONCASH: المدفوع إلكترونياً أكبر من إجمالي الأوردر بعد التعديل';
     end if;
     for v_pay in select * from jsonb_array_elements(p_changes->'payments') loop
       insert into public.payments (branch_id, order_id, shift_id, payment_method_id, method_name, is_cash, amount, reference)

@@ -237,7 +237,8 @@ begin
     raise exception 'NOT_ALLOWED: تقرير استهلاك الصوصات';
   end if;
 
-  return coalesce((
+  return jsonb_build_object(
+   'consumption', coalesce((
     with consumption as (
       -- أصناف المنيو (وافل ومشروبات): لكل وحدة مباعة
       select ri.ingredient_name, ri.unit,
@@ -283,7 +284,31 @@ begin
              )) as breakdown
         from consumption c
        group by c.ingredient_name, c.unit
-    ) g), '[]'::jsonb);
+    ) g), '[]'::jsonb),
+   -- أصناف اتباعت بدون رسبي: التقرير ناقص بدونها ولازم تظهر بالاسم
+   'missing_recipes', coalesce((
+     select jsonb_agg(t.name order by t.name)
+       from (
+         select oi.item_name as name
+           from public.order_items oi
+          where oi.order_id in (select public._report_order_ids(v_branch, p_shift, p_from, p_to))
+            and oi.status <> 'cancelled' and oi.pieces is null and oi.menu_item_id is not null
+            and not exists (
+              select 1 from public.recipes r
+               where r.branch_id = v_branch and r.is_active and r.menu_item_id = oi.menu_item_id)
+          group by oi.item_name
+         union
+         select 'دونتس ' || dt.name
+           from public.order_items oi
+           join public.donut_types dt on dt.id = oi.donut_type_id
+          where oi.order_id in (select public._report_order_ids(v_branch, p_shift, p_from, p_to))
+            and oi.status <> 'cancelled' and oi.donut_type_id is not null
+            and not exists (
+              select 1 from public.recipes r
+               where r.branch_id = v_branch and r.is_active and r.donut_type_id = oi.donut_type_id)
+          group by dt.name
+       ) t), '[]'::jsonb)
+  );
 end $$;
 
 -- ---------------------------------------------------------------------

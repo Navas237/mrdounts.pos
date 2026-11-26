@@ -1,5 +1,5 @@
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
-import { demoOrders, demoShiftReport, demoItemSales, demoSauceConsumption, demoRecipes } from './pos.fixtures';
+import { demoOrders, demoShiftReport, demoItemSales, demoSauceConsumption, demoRecipes, demoPaymentMethods } from './pos.fixtures';
 
 // =====================================================================
 // خدمة عمليات نقطة البيع الجديدة — كل العمليات عبر RPC في الباك إند
@@ -85,6 +85,7 @@ export interface OrderPayloadItem {
 
 export interface OrderPayload {
   order_type: string;
+  client_request_id?: string;
   customer_name?: string;
   customer_phone?: string;
   address_snapshot?: Record<string, unknown> | null;
@@ -117,6 +118,7 @@ function ensureLive() {
 export const posService = {
   // ---------------- طرق الدفع (جدول مرجعي، قراءة مباشرة) ----------------
   async listPaymentMethods(): Promise<PaymentMethod[]> {
+    if (isPosDemoMode) return demoPaymentMethods;
     const client = ensureLive();
     const { data, error } = await client
       .from('payment_methods')
@@ -196,7 +198,17 @@ export const posService = {
     return data as { id: string; total: number };
   },
 
+  // إعادة طباعة إيصال العميل على طابعة الإيصالات المعينة للفرع
+  async reprintReceipt(orderId: string): Promise<{ receipt_created: boolean }> {
+    if (isPosDemoMode) return { receipt_created: true };
+    const client = ensureLive();
+    const { data, error } = await client.rpc('reprint_receipt', { p_order: orderId });
+    if (error) throw new Error(error.message);
+    return data as { receipt_created: boolean };
+  },
+
   async reprintOrder(orderId: string): Promise<{ labels_created: number }> {
+    if (isPosDemoMode) return { labels_created: 2 };
     const client = ensureLive();
     const { data, error } = await client.rpc('reprint_order', { p_order: orderId });
     if (error) throw new Error(error.message);
@@ -224,7 +236,7 @@ export const posService = {
     return data;
   },
 
-  async sauceConsumptionReport(shiftId?: string | null, from?: string | null, to?: string | null): Promise<any[]> {
+  async sauceConsumptionReport(shiftId?: string | null, from?: string | null, to?: string | null): Promise<any> {
     if (isPosDemoMode) return demoSauceConsumption;
     const client = ensureLive();
     const { data, error } = await client.rpc('sauce_consumption_report', {

@@ -111,7 +111,14 @@ export const demoItemSales = {
   ],
 };
 
-export const demoSauceConsumption = [
+export const demoPaymentMethods = [
+  { id: 'demo-pm-1', name: 'كاش', is_cash: true, sort_order: 1, is_active: true },
+  { id: 'demo-pm-2', name: 'فيزا', is_cash: false, sort_order: 2, is_active: true },
+  { id: 'demo-pm-3', name: 'إنستاباي', is_cash: false, sort_order: 3, is_active: true },
+];
+
+export const demoSauceConsumption = {
+  consumption: [
   { ingredient: 'شوكولاتة', unit: 'جرام', total_consumed: 640, breakdown: [
     { target: 'عادي', units: 84, consumed: 420 },
     { target: 'وافل كلاسيك', units: 21, consumed: 210 },
@@ -127,7 +134,9 @@ export const demoSauceConsumption = [
   { ingredient: 'كراميل', unit: 'جرام', total_consumed: 105, breakdown: [
     { target: 'محشي', units: 21, consumed: 105 },
   ]},
-];
+  ],
+  missing_recipes: ['قهوة', 'ميلك شيك فراولة'],
+};
 
 export const demoRecipes = [
   {

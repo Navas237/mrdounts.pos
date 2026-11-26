@@ -5,6 +5,7 @@ import { formatCurrency } from '@/utils/formatters';
 import {
   ClipboardList,
   Printer,
+  Receipt,
   Pencil,
   X,
   RefreshCw,
@@ -70,6 +71,16 @@ export const Orders: React.FC = () => {
       setActionMessage(`تم إرسال ${res.labels_created} ملصق للطباعة للأوردر #${order.order_number}`);
     } catch (err: any) {
       setActionMessage(err.message || 'فشل إعادة الطباعة');
+    }
+  };
+
+  const handleReprintReceipt = async (order: OrderListItem) => {
+    setActionMessage(null);
+    try {
+      await posService.reprintReceipt(order.id);
+      setActionMessage(`تم إرسال إيصال الأوردر #${order.order_number} لطابعة الإيصالات`);
+    } catch (err: any) {
+      setActionMessage(err.message || 'فشل إعادة طباعة الإيصال');
     }
   };
 
@@ -182,14 +193,24 @@ export const Orders: React.FC = () => {
                         تفاصيل
                       </button>
                       {canReprint && (
-                        <button
-                          type="button"
-                          onClick={() => handleReprint(o)}
-                          title="إعادة طباعة الملصقات"
-                          className="p-1.5 rounded-lg border border-line text-ink-muted hover:text-brand-700 hover:bg-brand-50 cursor-pointer"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleReprintReceipt(o)}
+                            title="إعادة طباعة إيصال العميل"
+                            className="p-1.5 rounded-lg border border-line text-ink-muted hover:text-brand-700 hover:bg-brand-50 cursor-pointer"
+                          >
+                            <Receipt className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleReprint(o)}
+                            title="إعادة طباعة ملصقات الأقسام"
+                            className="p-1.5 rounded-lg border border-line text-ink-muted hover:text-brand-700 hover:bg-brand-50 cursor-pointer"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+                        </>
                       )}
                       {canEdit && o.status === 'active' && (
                         <button

@@ -20,6 +20,8 @@ export interface CreateOrderInput {
   total: number;
   items: CartItem[];
   payments: SplitPaymentItem[];
+  // مفتاح منع التكرار: ثابت عبر إعادة محاولة نفس الدفع
+  clientRequestId?: string;
 }
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
@@ -114,6 +116,7 @@ export const orderService = {
             ? 'amount'
             : null,
         discount_value: input.discountValue || 0,
+        client_request_id: input.clientRequestId,
         items: payloadItems,
         payments: input.payments.map((p) => ({
           method_name: p.method_name,

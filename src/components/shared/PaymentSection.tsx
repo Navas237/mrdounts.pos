@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useCart } from '@/hooks/useCart';
 import { posService, PaymentMethod } from '@/services/pos.service';
+import { isLiveSupabaseConfigured } from '@/lib/supabase';
 import { formatCurrency } from '@/utils/formatters';
 import { Banknote, CreditCard, Plus, X, Wallet } from 'lucide-react';
 
@@ -17,16 +18,20 @@ export const PaymentSection: React.FC = () => {
   const [methods, setMethods] = useState<PaymentMethod[]>(LOCAL_METHODS);
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
   const [amountInput, setAmountInput] = useState<string>('');
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
+  // وضع لايف: لا نخترع طرق دفع — نقرأ المعرّفة فقط ونفشل بوضوح مع إعادة محاولة
+  const loadMethods = () => {
+    if (!isLiveSupabaseConfigured) return; // الوضع المحلي/التجريبي: القائمة المحلية مقصودة
+    setLoadError(false);
     posService
       .listPaymentMethods()
-      .then((list) => {
-        if (list.length > 0) setMethods(list);
-      })
-      .catch(() => {
-        // الوضع المحلي أو فشل التحميل: نستخدم القائمة الاحتياطية
-      });
+      .then((list) => setMethods(list))
+      .catch(() => setLoadError(true));
+  };
+
+  useEffect(() => {
+    loadMethods();
   }, []);
 
   const selectedMethod =
@@ -34,6 +39,10 @@ export const PaymentSection: React.FC = () => {
 
   const handleAddPayment = (amount: number) => {
     if (!selectedMethod || amount <= 0) return;
+    // الإلكتروني لا يتجاوز المتبقي؛ الباقي للعميل يكون كاش فقط
+    if (!selectedMethod.is_cash && amount > remainingBalance) {
+      amount = remainingBalance;
+    }
     addPayment({
       id: `pay-${Date.now()}-${selectedMethod.id}`,
       method_name: selectedMethod.name,
@@ -55,6 +64,24 @@ export const PaymentSection: React.FC = () => {
         </div>
         <span className="text-[11px] text-ink-muted">ممكن تقسيم المبلغ على أكتر من طريقة</span>
       </div>
+
+      {loadError && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] font-bold text-rose-700">
+          <span>تعذر تحميل طرق الدفع المعرفة. تحقق من الاتصال.</span>
+          <button
+            type="button"
+            onClick={loadMethods}
+            className="px-2.5 py-1 rounded-md bg-rose-700 text-white text-[10px] font-extrabold cursor-pointer"
+          >
+            إعادة المحاولة
+          </button>
+        </div>
+      )}
+      {isLiveSupabaseConfigured && !loadError && methods.length === 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] font-bold text-amber-800">
+          لا توجد طرق دفع معرفة. أضفها من لوحة الإدارة — تبويب طرق الدفع.
+        </div>
+      )}
 
       {/* اختيار الطريقة */}
       <div className="flex flex-wrap gap-1.5">

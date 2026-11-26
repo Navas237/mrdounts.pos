@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCart } from '@/hooks/useCart';
 import { formatCurrency } from '@/utils/formatters';
@@ -131,6 +131,9 @@ export const CartBottomSection: React.FC = () => {
   };
 
   // تأكيد وتسجيل الأوردر
+  // مفتاح منع البيع المكرر: يتولد أول محاولة ويثبت عبر إعادتها، ويتصفّر عند النجاح
+  const checkoutIdRef = useRef<string | null>(null);
+
   const handleCheckout = async () => {
     if (items.length === 0) return;
     setIsSubmitting(true);
@@ -155,7 +158,9 @@ export const CartBottomSection: React.FC = () => {
         throw new Error(`المدفوع (${paidSum}) أقل من الإجمالي (${total}). أكمل باقي المبلغ أو احذف الدفعات.`);
       }
 
+      if (!checkoutIdRef.current) checkoutIdRef.current = crypto.randomUUID();
       const result = await orderService.createOrder({
+        clientRequestId: checkoutIdRef.current,
         orderType,
         customerName: nameInput || customer?.name || 'عميل صالة',
         customerPhone: phoneInput || customer?.phone,
@@ -172,6 +177,7 @@ export const CartBottomSection: React.FC = () => {
         payments: finalPayments,
       });
 
+      checkoutIdRef.current = null;
       setCreatedOrderNumber(result.order_number || 1);
       setIsSuccessModalOpen(true);
 
