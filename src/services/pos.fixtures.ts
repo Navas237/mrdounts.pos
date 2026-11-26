@@ -21,7 +21,7 @@ export const demoOrders: OrderListItem[] = [
     items: [
       { id: 'demo-item-1', item_name: 'بوكس 6 عادي', donut_type_name: 'عادي', pieces: 6, quantity: 1, unit_price: 120, extras_total: 0, line_total: 120, status: 'pending', was_modified: false,
         piece_details: [1, 2, 3, 4].map((n) => ({ piece_no: n, kind: 'topping_only' as const, filling: null, topping: 'شوكولاتة' })).concat([5, 6].map((n) => ({ piece_no: n, kind: 'topping_only' as const, filling: null, topping: 'لوتس' }))) },
-      { id: 'demo-item-2', item_name: 'وافل كلاسيك', quantity: 1, unit_price: 50, extras_total: 10, line_total: 60, status: 'pending', was_modified: false, notes: 'صوص زيادة', options: [{ option_name: 'شوكولاتة' }, { option_name: 'موز' }] },
+      { id: 'demo-item-2', item_name: 'وافل كلاسيك', quantity: 1, unit_price: 50, extras_total: 10, line_total: 60, status: 'pending', was_modified: false, notes: 'صوص زيادة', options: [{ option_name: 'شوكولاتة', extra_price: 0 }, { option_name: 'موز', extra_price: 10 }] },
       { id: 'demo-item-3', item_name: 'قهوة', quantity: 2, unit_price: 30, extras_total: 0, line_total: 60, status: 'preparing', was_modified: false },
     ],
     payments: [
@@ -35,18 +35,18 @@ export const demoOrders: OrderListItem[] = [
     shift_id: SHIFT,
     order_type: 'dine_in',
     status: 'active',
-    subtotal: 165,
+    subtotal: 185,
     discount_amount: 15,
     tax_amount: 0,
     delivery_fee: 0,
-    total: 150,
+    total: 170,
     created_at: new Date(Date.now() - 52 * 60000).toISOString(),
     items: [
-      { id: 'demo-item-4', item_name: 'بوكس 12 ميني', donut_type_name: 'ميني', pieces: 12, quantity: 1, unit_price: 110, extras_total: 0, line_total: 110, status: 'ready', was_modified: false,
-        piece_details: Array.from({ length: 12 }, (_, i) => ({ piece_no: i + 1, kind: 'topping_only' as const, filling: null, topping: i < 8 ? 'شوكولاتة' : 'سكر وقرفة' })) },
+      { id: 'demo-item-4', item_name: 'بوكس 12 ميني', donut_type_name: 'ميني', pieces: 12, quantity: 1, unit_price: 110, extras_total: 20, line_total: 130, status: 'ready', was_modified: false,
+        piece_details: Array.from({ length: 12 }, (_, i) => ({ piece_no: i + 1, kind: 'topping_only' as const, filling: null, topping: i < 8 ? 'شوكولاتة' : 'سكر وقرفة', filling_extra: 0, topping_extra: i < 8 ? 0 : 5 })) },
       { id: 'demo-item-5', item_name: 'ميلك شيك فراولة', quantity: 1, unit_price: 55, extras_total: 0, line_total: 55, status: 'ready', was_modified: false },
     ],
-    payments: [{ id: 'demo-pay-3', method_name: 'إنستاباي', is_cash: false, amount: 150 }],
+    payments: [{ id: 'demo-pay-3', method_name: 'إنستاباي', is_cash: false, amount: 170 }],
   },
   {
     id: 'demo-order-0003',
@@ -65,7 +65,7 @@ export const demoOrders: OrderListItem[] = [
     total: 245,
     created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
     items: [
-      { id: 'demo-item-6', item_name: 'وافل نوتيلا', quantity: 1, unit_price: 65, extras_total: 25, line_total: 90, status: 'ready', was_modified: true, options: [{ option_name: 'نوتيلا' }, { option_name: 'فراولة' }] },
+      { id: 'demo-item-6', item_name: 'وافل نوتيلا', quantity: 1, unit_price: 65, extras_total: 25, line_total: 90, status: 'ready', was_modified: true, options: [{ option_name: 'نوتيلا', extra_price: 15 }, { option_name: 'فراولة', extra_price: 10 }] },
       { id: 'demo-item-7', item_name: 'بوكس 4 محشي', donut_type_name: 'محشي', pieces: 4, quantity: 1, unit_price: 140, extras_total: 0, line_total: 140, status: 'ready', was_modified: false,
         piece_details: [
           { piece_no: 1, kind: 'stuffed' as const, filling: 'نوتيلا', topping: 'شوكولاتة' },

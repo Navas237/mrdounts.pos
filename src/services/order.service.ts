@@ -6,6 +6,7 @@ import { kitchenService, DonutToppingBox } from './kitchen.service';
 import { pickupService, PickupDepartmentStatus } from './pickup.service';
 import { shiftService } from './shift.service';
 import { posService } from './pos.service';
+import { menuService } from './menu.service';
 
 export interface CreateOrderInput {
   orderType: OrderType;
@@ -87,6 +88,14 @@ export const orderService = {
       const donutTypeName = (t?: string) =>
         t === 'mini' ? 'ميني' : t === 'stuffed' ? 'حشو' : t === 'regular' ? 'عادي' : undefined;
 
+      // سعر الإضافة لكل صوص لوحده (الحشو منفصل عن التوبنج) والمجموع كما هو
+      const stuffList = menuService.getStuffingSaucesSync();
+      const fillingExtra = (p: any): number => {
+        if (!p.stuffing_sauce_id || p.stuffing_sauce_id === 'plain') return 0;
+        const f = stuffList.find((x) => x.id === p.stuffing_sauce_id);
+        return Math.min(f?.extra_price || 0, p.extra_fee || 0);
+      };
+
       const payloadItems = input.items.map((item) => ({
         department_id: resolveDeptId(item),
         item_name: item.is_donut_box ? donutBoxName(item.donut_pieces_count, item.donut_type) : item.item_name || 'صنف',
@@ -106,10 +115,10 @@ export const orderService = {
           piece_kind: p.piece_type === 'stuffed' ? ('stuffed' as const) : ('topping_only' as const),
           options: [
             p.stuffing_sauce_name
-              ? { role: 'filling' as const, option_name: p.stuffing_sauce_name, extra_price: 0 }
+              ? { role: 'filling' as const, option_name: p.stuffing_sauce_name, extra_price: fillingExtra(p) }
               : null,
             p.topping_sauce_name
-              ? { role: 'topping' as const, option_name: p.topping_sauce_name, extra_price: p.extra_fee || 0 }
+              ? { role: 'topping' as const, option_name: p.topping_sauce_name, extra_price: Math.max(0, (p.extra_fee || 0) - fillingExtra(p)) }
               : null,
           ].filter(Boolean) as Array<{ role: 'filling' | 'topping'; option_name: string; extra_price: number }>,
         })),

@@ -66,7 +66,8 @@ export const useCartStore = create<CartState>((set, get) => ({
               quantity,
               line_total:
                 (i.unit_price +
-                  (i.options?.reduce((sum, opt) => sum + opt.extra_price, 0) || 0)) *
+                  (i.options?.reduce((sum, opt) => sum + opt.extra_price, 0) || 0) +
+                  (i.donut_pieces?.reduce((sum, pc) => sum + (pc.extra_fee || 0), 0) || 0)) *
                 quantity,
             }
           : i

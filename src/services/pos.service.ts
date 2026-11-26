@@ -44,8 +44,8 @@ export interface OrderListItem {
     pieces?: number;
     donut_type_name?: string;
     was_modified: boolean;
-    options?: Array<{ option_name: string }>;
-    piece_details?: Array<{ piece_no: number; kind: 'stuffed' | 'topping_only'; filling: string | null; topping: string | null }>;
+    options?: Array<{ option_name: string; extra_price?: number }>;
+    piece_details?: Array<{ piece_no: number; kind: 'stuffed' | 'topping_only'; filling: string | null; topping: string | null; filling_extra?: number; topping_extra?: number }>;
   }>;
   payments: Array<{
     id: string;

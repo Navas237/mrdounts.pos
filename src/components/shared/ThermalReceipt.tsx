@@ -2,6 +2,8 @@ import React from 'react';
 import { donutBoxName } from '@/utils/boxName';
 import type { CartItem, SplitPaymentItem } from '@/types/order';
 import type { OrderListItem } from '@/services/pos.service';
+import { menuService } from '@/services/menu.service';
+import { addExtra, reconcileExtras, type ExtraLine } from '@/utils/receiptExtras';
 
 /**
  * إيصال العميل على طابعة حرارية 80mm، لأنواع الطلب: صالة / تيك أواي / ديليفري (+ استلام).
@@ -14,8 +16,8 @@ export interface ReceiptItem {
   qty: number;
   unit_price: number;
   line_total: number;
-  options: string[];
-  piece_lines: string[];
+  /** بنود الإضافات المدفوعة فقط (صوص/خيار بسعر زيادة)، لكل وحدة صنف */
+  extras: ExtraLine[];
   notes?: string;
 }
 
@@ -94,6 +96,36 @@ export function groupPieceLines(typeName: string | undefined, pieces: PieceLike[
   return [...groups.values()].map((g) => `${g.n} قطعة ${g.text}`);
 }
 
+
+/** إضافات صنف في السلة: صوصات القطع (حشو/توبنج) + خيارات الصنف، بسعر كل واحد */
+function cartExtras(it: CartItem): ExtraLine[] {
+  const m = new Map<string, ExtraLine>();
+  const stuff = menuService.getStuffingSaucesSync();
+  const top = menuService.getToppingSaucesSync();
+  let attributed = 0;
+  for (const p of it.donut_pieces || []) {
+    const f = p.stuffing_sauce_id && p.stuffing_sauce_id !== 'plain' ? stuff.find((x) => x.id === p.stuffing_sauce_id) : undefined;
+    const t = p.topping_sauce_id ? top.find((x) => x.id === p.topping_sauce_id) : undefined;
+    if (f && f.extra_price > 0) { addExtra(m, f.name, f.extra_price); attributed += f.extra_price; }
+    if (t && t.extra_price > 0) { addExtra(m, t.name, t.extra_price); attributed += t.extra_price; }
+  }
+  for (const o of it.options || []) addExtra(m, o.name, o.extra_price);
+  const total = (it.donut_pieces || []).reduce((s, p) => s + (p.extra_fee || 0), 0)
+    + (it.options || []).reduce((s, o) => s + (o.extra_price || 0), 0);
+  return reconcileExtras([...m.values()], total);
+}
+
+/** إضافات صنف في طلب محفوظ: من أسعار خيارات القطع والخيارات المخزنة؛ والفرق (طلبات قديمة) سطر «إضافات» */
+function orderExtras(i: any): ExtraLine[] {
+  const m = new Map<string, ExtraLine>();
+  for (const p of i.piece_details || []) {
+    addExtra(m, p.filling, Number(p.filling_extra) || 0);
+    addExtra(m, p.topping, Number(p.topping_extra) || 0);
+  }
+  for (const o of i.options || []) addExtra(m, o.option_name, Number(o.extra_price) || 0);
+  return reconcileExtras([...m.values()], Number(i.extras_total) || 0);
+}
+
 export function receiptFromCart(args: {
   branch: ReceiptData['branch'];
   orderNumber: number | string;
@@ -125,15 +157,7 @@ export function receiptFromCart(args: {
       qty: it.quantity,
       unit_price: it.unit_price,
       line_total: it.line_total,
-      options: (it.options || []).map((o) => o.name),
-      piece_lines: groupPieceLines(
-        it.donut_type === 'mini' ? 'ميني' : 'عادي',
-        (it.donut_pieces || []).map((p) => ({
-          type: p.piece_type,
-          filling: p.stuffing_sauce_id === 'plain' ? null : p.stuffing_sauce_name,
-          topping: p.topping_sauce_name,
-        })),
-      ),
+      extras: cartExtras(it),
       notes: it.notes,
     })),
     subtotal: args.subtotal,
@@ -164,15 +188,7 @@ export function receiptFromOrder(o: OrderListItem, branch: ReceiptData['branch']
         qty: i.quantity,
         unit_price: i.unit_price,
         line_total: i.line_total,
-        options: (i.options || []).map((x: any) => x.option_name ?? x),
-        piece_lines: groupPieceLines(
-          i.donut_type_name,
-          (i.piece_details || []).map((p: any) => ({
-            type: p.kind,
-            filling: p.filling,
-            topping: p.topping,
-          })),
-        ),
+        extras: orderExtras(i),
         notes: i.notes,
       })),
     subtotal: o.subtotal,
@@ -241,30 +257,31 @@ export const ThermalReceiptDoc: React.FC<{ data: ReceiptData }> = ({ data }) => 
         <span className="tp-w-qty">كمية</span>
         <span className="tp-w-amt">إجمالي</span>
       </div>
-      {data.items.map((it, idx) => (
-        <div key={idx} className="tp-item">
-          <div className="tp-row">
-            <span className="tp-grow tp-bold">
-              {it.name}
-              {it.size ? ` - ${it.size}` : ''}
-            </span>
-            <span className="tp-w-qty tp-num">{it.qty}</span>
-            <span className="tp-w-amt tp-num">{money(it.line_total)}</span>
+      {data.items.map((it, idx) => {
+        const extraSum = it.extras.reduce((sum, e) => sum + e.qty * e.price, 0) * it.qty;
+        const baseTotal = Math.round((it.line_total - extraSum) * 100) / 100;
+        return (
+          <div key={idx} className="tp-item">
+            <div className="tp-row">
+              <span className="tp-grow tp-bold">
+                {it.name}
+                {it.size ? ` - ${it.size}` : ''}
+              </span>
+              <span className="tp-w-qty tp-num">{it.qty}</span>
+              <span className="tp-w-amt tp-num">{money(baseTotal)}</span>
+            </div>
+            {it.qty > 1 && <div className="tp-sub">سعر الوحدة {money(baseTotal / it.qty)}</div>}
+            {it.extras.map((e, k) => (
+              <div key={`x${k}`} className="tp-row">
+                <span className="tp-grow">إضافة {e.name}</span>
+                <span className="tp-w-qty tp-num">{e.qty * it.qty}</span>
+                <span className="tp-w-amt tp-num">{money(e.qty * e.price * it.qty)}</span>
+              </div>
+            ))}
+            {it.notes && <div className="tp-sub">ملاحظة: {it.notes}</div>}
           </div>
-          {it.qty > 1 && (
-            <div className="tp-sub">
-              سعر الوحدة {money(it.unit_price)}
-            </div>
-          )}
-          {it.piece_lines.map((l, i) => (
-            <div key={`p${i}`} className="tp-sub">
-              {l}
-            </div>
-          ))}
-          {it.options.length > 0 && <div className="tp-sub">+ {it.options.join('، ')}</div>}
-          {it.notes && <div className="tp-sub">ملاحظة: {it.notes}</div>}
-        </div>
-      ))}
+        );
+      })}
       <div className="tp-sep" />
 
       <Row name="المجموع" value={money(data.subtotal)} />
