@@ -748,41 +748,26 @@ export const kitchenService = {
   async toggleInjectionSauce(sauceKey: string): Promise<void> {
     if (isLiveSupabaseConfigured && supabase) {
       // المفتاح بالشكل sauce__donut_type. الإنجاز في اتجاه واحد فقط (طلب المستخدم):
-      // الضغط يعلّم كل القطع الـ pending من المفتاح ده كمحقونة، وأي ضغطة تانية
-      // بعد الاكتمال لا تلغي ولا تكرر. القطع الجديدة (injected_at = null) تفضل pending.
+      // الـ RPC يعلّم قطع الـ pending فقط، وأي ضغطة تانية بعد الاكتمال لا تلغي ولا
+      // تكرر ولا تعيد الختم. القطع الجديدة (injected_at = null) تفضل pending.
+      // الصلاحية: kitchen.prepare على قسم الدونتس فقط (بدون order.create/edit).
       const [sauceName, dType = 'regular'] = sauceKey.split('__');
-      const orders = await this.getDonutToppingOrders();
-      const matched: { id: string; injected_at?: string | null }[] = [];
-      orders.forEach((ord) =>
-        ord.boxes.forEach((box) => {
-          if ((box.donut_type || 'regular') !== dType) return;
-          box.pieces.forEach((p) => {
-            if (!p.id) return;
-            const isStuffed = p.is_stuffed && p.stuffing_sauce_name && p.stuffing_sauce_name !== 'سادة';
-            const pieceSauce = isStuffed ? p.stuffing_sauce_name : 'سادة (بدون حشو)';
-            if (pieceSauce === sauceName) matched.push({ id: p.id, injected_at: p.injected_at });
-          });
-        })
-      );
-      if (matched.length === 0) return;
-
-      let userId: string | null = null;
+      let branchId: string | null = null;
       try {
         const raw = typeof window !== 'undefined' ? localStorage.getItem('mrdounts_session') : null;
-        userId = raw ? JSON.parse(raw)?.profile?.id ?? null : null;
+        branchId = raw ? JSON.parse(raw)?.branch?.id ?? null : null;
       } catch {
-        userId = null;
+        branchId = null;
       }
-
-      const pending = matched.filter((m) => !m.injected_at);
-      if (pending.length === 0) return; // مكتمل بالفعل: الضغط الإضافي لا يغير شيئاً
-      const { error: updErr } = await supabase
-        .from('order_item_pieces')
-        .update({ injected_at: new Date().toISOString(), injected_by: userId })
-        .in('id', pending.map((m) => m.id));
-      if (updErr) {
-        console.error('Failed to persist injection state in Supabase:', updErr);
-        throw new Error(updErr.message);
+      if (!branchId) throw new Error('لا يوجد فرع في الجلسة');
+      const { error } = await supabase.rpc('complete_injection_sauce', {
+        p_branch: branchId,
+        p_sauce_name: sauceName,
+        p_donut_type: dType,
+      });
+      if (error) {
+        console.error('Failed to persist injection state in Supabase:', error);
+        throw new Error(error.message);
       }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('mrdonuts:kitchen-updated'));
