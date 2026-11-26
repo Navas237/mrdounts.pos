@@ -296,6 +296,12 @@ declare
   v_pay jsonb;
   v_paid numeric(12,2);
   v_noncash numeric(12,2);
+  v_donut_type_id uuid;
+  v_box_size_id uuid;
+  v_opt jsonb;
+  v_piece jsonb;
+  v_piece_id uuid;
+  v_popt jsonb;
 begin
   if not public.auth_has_perm('order.edit') then
     raise exception 'NOT_ALLOWED: تعديل الأوردر';
@@ -347,9 +353,31 @@ begin
     end loop;
   end if;
 
-  -- إضافة أصناف جديدة (نفس شكل الإنشاء)
+  -- إضافة أصناف جديدة (نفس عقد create_order_full بالكامل: حل نوع الدونتس
+  -- وحجم البوكس بالاسم/العدد، خيارات الصنف، وقطع الدونتس وصوصات كل قطعة —
+  -- حتى لا يدخل بوكس دونتس ناقص القطع فيتجاوز محطة الحقن والتقارير)
   if jsonb_typeof(p_changes->'add_items') = 'array' then
     for v_item in select * from jsonb_array_elements(p_changes->'add_items') loop
+      v_donut_type_id := nullif(v_item->>'donut_type_id','')::uuid;
+      if v_donut_type_id is null and nullif(v_item->>'donut_type_name','') is not null then
+        select id into v_donut_type_id from public.donut_types
+         where branch_id = v_order.branch_id and name = v_item->>'donut_type_name' limit 1;
+      end if;
+      -- أحجام البوكسات موحدة لكل فرع بعدد القطع (migration 20261123000001)
+      v_box_size_id := nullif(v_item->>'box_size_id','')::uuid;
+      if v_box_size_id is null and nullif(v_item->>'pieces','') is not null then
+        select id into v_box_size_id from public.donut_box_sizes
+         where branch_id = v_order.branch_id and pieces = (v_item->>'pieces')::int
+         order by id limit 1;
+      end if;
+
+      -- صنف دونتس بدون تفاصيل القطع يُرفض ظاهراً بدل إنشاء بوكس ناقص
+      if (v_box_size_id is not null or v_donut_type_id is not null
+          or nullif(v_item->>'donut_type_name','') is not null)
+         and jsonb_typeof(v_item->'donut_pieces') is distinct from 'array' then
+        raise exception 'MISSING_DONUT_PIECES: إضافة بوكس دونتس تتطلب تفاصيل القطع (donut_pieces)';
+      end if;
+
       insert into public.order_items (
         branch_id, order_id, department_id, menu_item_id, size_id,
         item_name, size_name, quantity, unit_price, notes,
@@ -364,11 +392,52 @@ begin
         coalesce((v_item->>'quantity')::int, 1),
         coalesce((v_item->>'unit_price')::numeric, 0),
         nullif(v_item->>'notes',''),
-        nullif(v_item->>'donut_type_id','')::uuid,
+        v_donut_type_id,
         nullif(v_item->>'donut_type_name',''),
-        nullif(v_item->>'box_size_id','')::uuid,
+        v_box_size_id,
         nullif(v_item->>'pieces','')::int)
       returning id into v_new_item_id;
+
+      -- خيارات الصنف (صوصات/إضافات الوافل والمشروبات)
+      if jsonb_typeof(v_item->'options') = 'array' then
+        for v_opt in select * from jsonb_array_elements(v_item->'options') loop
+          insert into public.order_item_options (
+            branch_id, order_item_id, group_id, option_id, group_name, option_name, extra_price)
+          values (
+            v_order.branch_id, v_new_item_id,
+            nullif(v_opt->>'group_id','')::uuid,
+            nullif(v_opt->>'option_id','')::uuid,
+            v_opt->>'group_name',
+            v_opt->>'option_name',
+            coalesce((v_opt->>'extra_price')::numeric, 0));
+        end loop;
+      end if;
+
+      -- قطع الدونتس وصوصات كل قطعة (تدخل محطة الحقن كطلب pending فوراً)
+      if jsonb_typeof(v_item->'donut_pieces') = 'array' then
+        for v_piece in select * from jsonb_array_elements(v_item->'donut_pieces') loop
+          insert into public.order_item_pieces (branch_id, order_item_id, piece_no, piece_kind)
+          values (
+            v_order.branch_id, v_new_item_id,
+            (v_piece->>'piece_no')::int,
+            (v_piece->>'piece_kind')::public.piece_kind)
+          returning id into v_piece_id;
+
+          if jsonb_typeof(v_piece->'options') = 'array' then
+            for v_popt in select * from jsonb_array_elements(v_piece->'options') loop
+              insert into public.order_item_piece_options (
+                branch_id, piece_id, role, group_id, option_id, option_name, extra_price)
+              values (
+                v_order.branch_id, v_piece_id,
+                (v_popt->>'role')::public.piece_role,
+                nullif(v_popt->>'group_id','')::uuid,
+                nullif(v_popt->>'option_id','')::uuid,
+                v_popt->>'option_name',
+                coalesce((v_popt->>'extra_price')::numeric, 0));
+            end loop;
+          end if;
+        end loop;
+      end if;
     end loop;
   end if;
 
