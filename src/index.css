@@ -421,3 +421,11 @@ select {
     margin: 2mm 4mm;
   }
 }
+
+/* ===== إيصال العميل 80mm ===== */
+.tp-type { font-size: 18px; font-weight: 800; line-height: 1.2; }
+.tp-orderno { font-size: 26px; font-weight: 800; line-height: 1.1; }
+.tp-item { margin-bottom: 1.2mm; }
+.tp-sub { font-size: 9.5px; padding-inline-start: 2.5mm; overflow-wrap: anywhere; }
+.tp-addr { font-size: 10.5px; overflow-wrap: anywhere; }
+.tp-w-qty { min-width: 9mm; text-align: center; }

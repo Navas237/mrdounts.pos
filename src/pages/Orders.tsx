@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useAuthStore } from '@/hooks/useAuth';
+import { ThermalReceiptDoc, receiptFromOrder } from '@/components/shared/ThermalReceipt';
 import { posService, isPosDemoMode, OrderListItem, PaymentMethod } from '@/services/pos.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatCurrency } from '@/utils/formatters';
@@ -74,14 +77,12 @@ export const Orders: React.FC = () => {
     }
   };
 
-  const handleReprintReceipt = async (order: OrderListItem) => {
+  const [receiptOrder, setReceiptOrder] = useState<OrderListItem | null>(null);
+  const branch = useAuthStore((st) => st.session?.branch);
+  // إيصال العميل: معاينة 80mm ثم طباعة من المتصفح (طابور print_jobs لسه بدون مستهلك)
+  const handleReprintReceipt = (order: OrderListItem) => {
     setActionMessage(null);
-    try {
-      await posService.reprintReceipt(order.id);
-      setActionMessage(`تم إرسال إيصال الأوردر #${order.order_number} لطابعة الإيصالات`);
-    } catch (err: any) {
-      setActionMessage(err.message || 'فشل إعادة طباعة الإيصال');
-    }
+    setReceiptOrder(order);
   };
 
   return (
@@ -246,6 +247,52 @@ export const Orders: React.FC = () => {
             load();
           }}
         />
+      )}
+      {receiptOrder && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-surface border border-line rounded-2xl p-4 max-h-[90vh] overflow-y-auto">
+              <div className="bg-white rounded-lg border border-line mx-auto" style={{ width: '80mm', padding: '4mm' }}>
+                <ThermalReceiptDoc
+                  data={receiptFromOrder(receiptOrder, {
+                    name: branch?.name,
+                    phone: branch?.phone,
+                    address: branch?.address,
+                  })}
+                />
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex-1 py-2 px-3 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>طباعة</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReceiptOrder(null)}
+                  className="py-2 px-3 rounded-xl border border-line text-ink font-bold text-xs cursor-pointer"
+                >
+                  إغلاق
+                </button>
+              </div>
+            </div>
+          </div>
+          {createPortal(
+            <div className="thermal-print-root">
+              <ThermalReceiptDoc
+                data={receiptFromOrder(receiptOrder, {
+                  name: branch?.name,
+                  phone: branch?.phone,
+                  address: branch?.address,
+                })}
+              />
+            </div>,
+            document.body,
+          )}
+        </>
       )}
     </div>
   );

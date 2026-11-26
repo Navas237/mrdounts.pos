@@ -1,3 +1,6 @@
+import { createPortal } from 'react-dom';
+import { useAuthStore } from '@/hooks/useAuth';
+import { ThermalReceiptDoc, receiptFromCart, ReceiptData } from '@/components/shared/ThermalReceipt';
 import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCart } from '@/hooks/useCart';
@@ -68,6 +71,8 @@ export const CartBottomSection: React.FC = () => {
   const [showDiscountInput, setShowDiscountInput] = useState(false);
   const [discountValInput, setDiscountValInput] = useState(10);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const branch = useAuthStore((st) => st.session?.branch);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [createdOrderNumber, setCreatedOrderNumber] = useState<number | null>(null);
@@ -146,7 +151,7 @@ export const CartBottomSection: React.FC = () => {
         finalPayments = [
           {
             id: `pay-${Date.now()}`,
-            method_name: 'نقدي (كاش)',
+            method_name: 'نقدي',
             is_cash: true,
             amount: total,
           },
@@ -178,6 +183,23 @@ export const CartBottomSection: React.FC = () => {
       });
 
       checkoutIdRef.current = null;
+      setReceipt(
+        receiptFromCart({
+          branch: { name: branch?.name, phone: branch?.phone, address: branch?.address },
+          orderNumber: result.order_number || 1,
+          orderType,
+          items,
+          customerName: nameInput || customer?.name,
+          customerPhone: phoneInput || customer?.phone,
+          address: addressInput || customer?.address,
+          subtotal,
+          discount: discountAmount,
+          tax: taxAmount,
+          deliveryFee: orderType === 'delivery' ? deliveryFee : 0,
+          total,
+          payments: finalPayments,
+        }),
+      );
       setCreatedOrderNumber(result.order_number || 1);
       setIsSuccessModalOpen(true);
 
@@ -497,6 +519,14 @@ export const CartBottomSection: React.FC = () => {
           <span>{checkoutError}</span>
         </div>
       )}
+
+      {isSuccessModalOpen && receipt &&
+        createPortal(
+          <div className="thermal-print-root">
+            <ThermalReceiptDoc data={receipt} />
+          </div>,
+          document.body,
+        )}
 
       {/* مودال نجاح تسجيل الأوردر */}
       {isSuccessModalOpen && (

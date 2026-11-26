@@ -27,6 +27,8 @@ export interface OrderListItem {
   delivery_fee: number;
   total: number;
   notes?: string;
+  address_snapshot?: { address?: string } | null;
+  delivery_zone_name?: string | null;
   cancel_reason?: string;
   created_at: string;
   items: Array<{
@@ -42,6 +44,8 @@ export interface OrderListItem {
     pieces?: number;
     donut_type_name?: string;
     was_modified: boolean;
+    options?: Array<{ option_name: string }>;
+    piece_details?: Array<{ piece_no: number; kind: 'stuffed' | 'topping_only'; filling: string | null; topping: string | null }>;
   }>;
   payments: Array<{
     id: string;
