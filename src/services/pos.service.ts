@@ -1,4 +1,5 @@
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
+import { demoOrders, demoShiftReport, demoItemSales, demoSauceConsumption, demoRecipes } from './pos.fixtures';
 
 // =====================================================================
 // خدمة عمليات نقطة البيع الجديدة — كل العمليات عبر RPC في الباك إند
@@ -103,6 +104,9 @@ export interface OrderPayload {
   }>;
 }
 
+// وضع العرض التجريبي: فقط بدون اتصال Supabase ومع ضبط VITE_POS_DEMO=1 صراحةً
+export const isPosDemoMode = !isLiveSupabaseConfigured && import.meta.env.VITE_POS_DEMO === '1';
+
 function ensureLive() {
   if (!isLiveSupabaseConfigured || !supabase) {
     throw new Error('هذه العملية تحتاج اتصال قاعدة البيانات (Supabase)');
@@ -154,6 +158,9 @@ export const posService = {
 
   // ---------------- صفحة الطلبات ----------------
   async listOrders(shiftId?: string | null, status?: string | null): Promise<OrderListItem[]> {
+    if (isPosDemoMode) {
+      return status ? demoOrders.filter((o) => o.status === status) : demoOrders;
+    }
     const client = ensureLive();
     const { data, error } = await client.rpc('list_orders', {
       p_shift_id: shiftId || null,
@@ -198,6 +205,7 @@ export const posService = {
 
   // ---------------- التقارير ----------------
   async shiftEndReport(shiftId: string): Promise<any> {
+    if (isPosDemoMode) return demoShiftReport;
     const client = ensureLive();
     const { data, error } = await client.rpc('shift_end_report', { p_shift: shiftId });
     if (error) throw new Error(error.message);
@@ -205,6 +213,7 @@ export const posService = {
   },
 
   async itemSalesReport(shiftId?: string | null, from?: string | null, to?: string | null): Promise<any> {
+    if (isPosDemoMode) return demoItemSales;
     const client = ensureLive();
     const { data, error } = await client.rpc('item_sales_report', {
       p_shift: shiftId || null,
@@ -216,6 +225,7 @@ export const posService = {
   },
 
   async sauceConsumptionReport(shiftId?: string | null, from?: string | null, to?: string | null): Promise<any[]> {
+    if (isPosDemoMode) return demoSauceConsumption;
     const client = ensureLive();
     const { data, error } = await client.rpc('sauce_consumption_report', {
       p_shift: shiftId || null,
@@ -228,6 +238,7 @@ export const posService = {
 
   // ---------------- الرسبي ----------------
   async listRecipes(): Promise<any[]> {
+    if (isPosDemoMode) return demoRecipes;
     const client = ensureLive();
     const { data, error } = await client.rpc('list_recipes');
     if (error) throw new Error(error.message);

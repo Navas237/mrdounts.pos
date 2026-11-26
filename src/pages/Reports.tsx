@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
-import { posService } from '@/services/pos.service';
+import { posService, isPosDemoMode } from '@/services/pos.service';
 import { formatCurrency } from '@/utils/formatters';
 import { BarChart3, RefreshCw, AlertCircle } from 'lucide-react';
 
@@ -22,6 +22,11 @@ export const Reports: React.FC = () => {
 
   // تحميل الشفتات
   useEffect(() => {
+    if (isPosDemoMode) {
+      setShifts([{ id: 'demo-shift-0001', status: 'open', opened_at: new Date().toISOString() }]);
+      setSelectedShift('demo-shift-0001');
+      return;
+    }
     if (!isLiveSupabaseConfigured || !supabase) return;
     supabase
       .from('shifts')
@@ -60,7 +65,7 @@ export const Reports: React.FC = () => {
     loadReports();
   }, [loadReports]);
 
-  if (!isLiveSupabaseConfigured) {
+  if (!isLiveSupabaseConfigured && !isPosDemoMode) {
     return (
       <div className="py-16 text-center text-xs text-ink-muted bg-surface rounded-xl border border-line">
         التقارير تحتاج اتصال قاعدة البيانات (Supabase)
@@ -78,6 +83,9 @@ export const Reports: React.FC = () => {
           </div>
           <div>
             <h2 className="font-black text-sm sm:text-base text-ink">التقارير</h2>
+            {isPosDemoMode && (
+              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">بيانات تجريبية للعرض</span>
+            )}
             <p className="text-[11px] text-ink-muted">نهاية الشفت، مبيعات الأصناف، واستهلاك الصوصات</p>
           </div>
         </div>

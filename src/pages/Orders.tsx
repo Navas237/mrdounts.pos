@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { posService, OrderListItem, PaymentMethod } from '@/services/pos.service';
+import { posService, isPosDemoMode, OrderListItem, PaymentMethod } from '@/services/pos.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatCurrency } from '@/utils/formatters';
 import {
@@ -83,6 +83,9 @@ export const Orders: React.FC = () => {
           </div>
           <div>
             <h2 className="font-black text-sm sm:text-base text-ink">الطلبات</h2>
+            {isPosDemoMode && (
+              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">بيانات تجريبية للعرض</span>
+            )}
             <p className="text-[11px] text-ink-muted">عرض كل الطلبات وإعادة الطباعة والتعديل</p>
           </div>
         </div>

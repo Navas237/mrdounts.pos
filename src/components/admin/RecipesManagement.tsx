@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
-import { posService } from '@/services/pos.service';
+import { posService, isPosDemoMode } from '@/services/pos.service';
+import { demoRecipes } from '@/services/pos.fixtures';
 import { Plus, X, Save, AlertCircle, ChefHat } from 'lucide-react';
 
 interface RecipeTarget {
@@ -35,6 +36,17 @@ export const RecipesManagement: React.FC = () => {
   const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (isPosDemoMode) {
+      const list = demoRecipes as any[];
+      setRecipes(list);
+      setTargets(list.map((r) => ({
+        target_type: r.target_type,
+        id: r.menu_item_id || r.donut_type_id,
+        name: r.target_type === 'donut_type' ? `دونتس ${r.target_name}` : r.target_name,
+        department_name: r.target_type === 'donut_type' ? 'دونتس' : 'وافل',
+      })));
+      return;
+    }
     if (!isLiveSupabaseConfigured || !supabase) return;
     const [itemsRes, typesRes, recipeList] = await Promise.all([
       supabase.from('menu_items').select('id, name, departments(name)').eq('is_active', true).order('name'),
@@ -100,7 +112,7 @@ export const RecipesManagement: React.FC = () => {
     }
   };
 
-  if (!isLiveSupabaseConfigured) {
+  if (!isLiveSupabaseConfigured && !isPosDemoMode) {
     return (
       <div className="py-12 text-center text-xs text-ink-muted">
         إدارة الرسبي تحتاج اتصال قاعدة البيانات (Supabase)
