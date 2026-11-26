@@ -27,6 +27,8 @@ const Pickup = lazy(() => import('@/pages/Pickup').then((m) => ({ default: m.Pic
 const Admin = lazy(() => import('@/pages/Admin').then((m) => ({ default: m.Admin })));
 const Shifts = lazy(() => import('@/pages/Shifts').then((m) => ({ default: m.Shifts })));
 const Customers = lazy(() => import('@/pages/Customers').then((m) => ({ default: m.Customers })));
+const Orders = lazy(() => import('@/pages/Orders').then((m) => ({ default: m.Orders })));
+const Reports = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.Reports })));
 const Unauthorized = lazy(() =>
   import('@/pages/Unauthorized').then((m) => ({ default: m.Unauthorized }))
 );
@@ -133,6 +135,24 @@ export const AppRoutes: React.FC = () => {
             element={
               <ProtectedRoute requiredScreen="screen.customers">
                 <Customers />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="orders"
+            element={
+              <ProtectedRoute requiredScreen="screen.orders">
+                <Orders />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="reports"
+            element={
+              <ProtectedRoute requiredScreen="screen.reports">
+                <Reports />
               </ProtectedRoute>
             }
           />

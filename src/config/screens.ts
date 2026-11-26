@@ -68,6 +68,22 @@ export const ALL_SCREENS: AppScreenConfig[] = [
     description: 'فتح وقفل الشفت، رصيد الدرج،    ',
   },
   {
+    id: 'orders',
+    title: 'الأوردرات',
+    path: '/orders',
+    icon: 'ClipboardList',
+    requiredScreenPerm: 'screen.orders',
+    description: 'قائمة الأوردرات، إعادة الطباعة وتعديل الأوردر',
+  },
+  {
+    id: 'reports',
+    title: 'التقارير',
+    path: '/reports',
+    icon: 'BarChart3',
+    requiredScreenPerm: 'screen.reports',
+    description: 'تقرير نهاية الشفت، مبيعات الأصناف، واستهلاك الصوصات',
+  },
+  {
     id: 'customers',
     title: 'العملاء (CRM)',
     path: '/customers',

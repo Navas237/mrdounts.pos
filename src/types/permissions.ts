@@ -8,6 +8,8 @@
 
 export type ScreenPermissionKey =
   | 'screen.cashier'
+  | 'screen.orders'
+  | 'screen.reports'
   | 'screen.pickup'
   | 'screen.customers'
   | 'screen.drawer'

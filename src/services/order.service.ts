@@ -3,6 +3,7 @@ import { CartItem, SplitPaymentItem, OrderType } from '@/types/order';
 import { kitchenService, DonutToppingBox } from './kitchen.service';
 import { pickupService, PickupDepartmentStatus } from './pickup.service';
 import { shiftService } from './shift.service';
+import { posService } from './pos.service';
 
 export interface CreateOrderInput {
   orderType: OrderType;
@@ -43,236 +44,89 @@ function getNextOrderNumber(): number {
 export const orderService = {
   async createOrder(input: CreateOrderInput): Promise<{ id: string; order_number?: number }> {
     if (isLiveSupabaseConfigured && supabase) {
-      // 1. جلب الشفت النشط وأقسام الفرع بالتوازي (Parallel Fetch)
+      // إنشاء الأوردر بالكامل عبر RPC في الباك إند (معاملة واحدة)
       const isUuid = (val?: string) =>
         typeof val === 'string' &&
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
 
-      const [shiftRes, deptsRes] = await Promise.all([
-        supabase
-          .from('shifts')
-          .select('id, branch_id')
-          .eq('status', 'open')
-          .maybeSingle(),
-        supabase
-          .from('departments')
-          .select('id, name, behavior'),
-      ]);
+      // حل معرفات الأقسام للأصناف القادمة من الوضع المحلي (مثل d-donuts)
+      const { data: branchDepts } = await supabase
+        .from('departments')
+        .select('id, name, behavior');
 
-      const shift = shiftRes.data;
-      if (shiftRes.error || !shift) {
-        throw new Error('لا يوجد شفت مفتوح حالياً. يجب فتح شفت قبل تسجيل الطلبات.');
-      }
+      const resolveDeptId = (item: CartItem): string => {
+        if (isUuid(item.department_id)) return item.department_id;
+        const match =
+          (branchDepts || []).find(
+            (d: any) =>
+              (item.is_donut_box && d.behavior === 'donut_box') ||
+              (item.department_name && d.name.includes(item.department_name)) ||
+              (item.is_donut_box && d.name.includes('دونت'))
+          ) || (branchDepts || [])[0];
+        return match?.id;
+      };
 
-      const branchId = shift.branch_id;
-      const branchDepts = deptsRes.data || [];
+      const donutTypeName = (t?: string) =>
+        t === 'mini' ? 'ميني' : t === 'stuffed' ? 'حشو' : t === 'regular' ? 'عادي' : undefined;
 
-      // 2. إدراج الأوردر الرئيسي (متوافق مع حقول جدول orders بقاعدة البيانات)
-      const { data: newOrder, error: orderErr } = await supabase
-        .from('orders')
-        .insert({
-          branch_id: branchId,
-          shift_id: shift.id,
-          order_type: input.orderType,
-          customer_name: input.customerName || 'عميل صالة',
-          customer_phone: input.customerPhone || null,
-          address_snapshot: input.customerAddress ? { address: input.customerAddress } : null,
-          notes: input.customerAddress ? `العنوان: ${input.customerAddress}` : null,
-          subtotal: input.subtotal,
-          discount_type:
-            input.discountType === 'percentage'
-              ? 'percent'
-              : input.discountType === 'fixed'
-              ? 'amount'
-              : null,
-          discount_value: input.discountValue,
-          discount_amount: input.discountAmount,
-          tax_rate: input.taxRate,
-          tax_amount: input.taxAmount,
-          delivery_fee: input.deliveryFee,
-          total: input.total,
-          status: 'active',
-        })
-        .select('id, order_number')
-        .single();
-
-      if (orderErr || !newOrder) {
-        console.error('Failed to insert order:', orderErr);
-        throw new Error(orderErr?.message || 'فشل حفظ الطلب بقاعدة البيانات');
-      }
-
-      const orderId = newOrder.id;
-
-      // 3. تجهيز وإدراج كافة الأصناف دفعة واحدة (Batch Insert for Order Items)
-      const orderItemsPayload = input.items.map((item) => {
-        const itemName =
+      const payloadItems = input.items.map((item) => ({
+        department_id: resolveDeptId(item),
+        item_name:
           item.item_name ||
           (item.is_donut_box
-            ? `بوكس دونتس ${
-                item.donut_type === 'mini'
-                  ? 'ميني'
-                  : item.donut_type === 'stuffed'
-                  ? 'حشو'
-                  : 'عادي'
-              } (${item.donut_pieces_count || 0} قطعة)`
-            : 'صنف');
-
-        let resolvedDeptId = item.department_id;
-        if (!isUuid(resolvedDeptId)) {
-          const match =
-            branchDepts.find(
-              (d: any) =>
-                d.behavior === (item.is_donut_box ? 'donut_box' : undefined) ||
-                d.name.includes(item.department_name || '') ||
-                (item.is_donut_box && d.name.includes('دونتس'))
-            ) || branchDepts[0];
-
-          if (match && isUuid(match.id)) {
-            resolvedDeptId = match.id;
-          }
-        }
-
-        const lineTotal =
-          item.line_total ||
-          item.unit_price * item.quantity +
-            (item.options?.reduce((s, o) => s + (o.extra_price || 0), 0) || 0);
-
-        return {
-          branch_id: branchId,
-          order_id: orderId,
-          department_id: resolvedDeptId,
-          item_name: itemName,
-          size_name: item.size_name || null,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          line_total: lineTotal,
-          donut_type_name:
-            item.donut_type === 'mini'
-              ? 'ميني'
-              : item.donut_type === 'stuffed'
-              ? 'حشو'
-              : item.donut_type === 'regular'
-              ? 'عادي'
+            ? `بوكس دونتس ${donutTypeName(item.donut_type) || ''} (${item.donut_pieces_count || 0} قطعة)`
+            : 'صنف'),
+        size_name: item.size_name || undefined,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        notes: item.notes || undefined,
+        donut_type_name: item.is_donut_box ? donutTypeName(item.donut_type) : undefined,
+        pieces: item.donut_pieces_count || undefined,
+        options: (item.options || []).map((o) => ({
+          option_id: isUuid(o.option_id) ? o.option_id : undefined,
+          option_name: o.name,
+          extra_price: o.extra_price || 0,
+        })),
+        donut_pieces: (item.donut_pieces || []).map((p) => ({
+          piece_no: p.piece_number,
+          piece_kind: p.piece_type === 'stuffed' ? ('stuffed' as const) : ('topping_only' as const),
+          options: [
+            p.stuffing_sauce_name
+              ? { role: 'filling' as const, option_name: p.stuffing_sauce_name, extra_price: 0 }
               : null,
-          pieces: item.donut_pieces_count || null,
-          status: 'pending',
-        };
-      });
-
-      const { data: insertedItems, error: itemsErr } = await supabase
-        .from('order_items')
-        .insert(orderItemsPayload)
-        .select('id');
-
-      if (itemsErr || !insertedItems) {
-        console.error('Failed to insert order items batch:', itemsErr);
-        throw new Error('فشل إدراج أصناف الطلب بقاعدة البيانات');
-      }
-
-      // 4. تجهيز خيارات الأصناف (options) وقطع الدونتس (pieces) المجمعة
-      const allItemOptionsPayload: any[] = [];
-      const allPiecesPayload: any[] = [];
-      const piecesMetadataMap: Array<{
-        stuffing_sauce_name?: string;
-        topping_sauce_name?: string;
-        extra_fee?: number;
-      }> = [];
-
-      input.items.forEach((item, idx) => {
-        const orderItemId = insertedItems[idx]?.id;
-        if (!orderItemId) return;
-
-        // خيارات الأصناف العادية
-        if (item.options && item.options.length > 0) {
-          for (const opt of item.options) {
-            allItemOptionsPayload.push({
-              branch_id: branchId,
-              order_item_id: orderItemId,
-              option_name: opt.name,
-              extra_price: opt.extra_price || 0,
-            });
-          }
-        }
-
-        // قطع الدونتس
-        if (item.donut_pieces && item.donut_pieces.length > 0) {
-          for (const piece of item.donut_pieces) {
-            allPiecesPayload.push({
-              branch_id: branchId,
-              order_id: orderId,
-              order_item_id: orderItemId,
-              piece_no: piece.piece_number,
-              piece_kind: piece.piece_type === 'stuffed' ? 'stuffed' : 'topping_only',
-            });
-            piecesMetadataMap.push({
-              stuffing_sauce_name: piece.stuffing_sauce_name,
-              topping_sauce_name: piece.topping_sauce_name,
-              extra_fee: piece.extra_fee,
-            });
-          }
-        }
-      });
-
-      // 5. إدراج القطع المجمعة دفعة واحدة ثم خيارات القطع
-      let allPieceOptionsPayload: any[] = [];
-      if (allPiecesPayload.length > 0) {
-        const { data: insertedPieces } = await supabase
-          .from('order_item_pieces')
-          .insert(allPiecesPayload)
-          .select('id');
-
-        if (insertedPieces) {
-          insertedPieces.forEach((pieceRow, pIdx) => {
-            const meta = piecesMetadataMap[pIdx];
-            if (meta?.stuffing_sauce_name) {
-              allPieceOptionsPayload.push({
-                branch_id: branchId,
-                piece_id: pieceRow.id,
-                role: 'filling',
-                option_name: meta.stuffing_sauce_name,
-                extra_price: 0,
-              });
-            }
-            if (meta?.topping_sauce_name) {
-              allPieceOptionsPayload.push({
-                branch_id: branchId,
-                piece_id: pieceRow.id,
-                role: 'topping',
-                option_name: meta.topping_sauce_name,
-                extra_price: meta.extra_fee || 0,
-              });
-            }
-          });
-        }
-      }
-
-      // 6. تجهيز المدفوعات وإرسال كافة الخيارات والمدفوعات بالتوازي (Parallel Bulk Inserts)
-      const paymentsPayload = input.payments.map((p) => ({
-        branch_id: branchId,
-        order_id: orderId,
-        shift_id: shift.id,
-        method_name: p.method_name,
-        is_cash: p.is_cash,
-        amount: p.amount,
+            p.topping_sauce_name
+              ? { role: 'topping' as const, option_name: p.topping_sauce_name, extra_price: p.extra_fee || 0 }
+              : null,
+          ].filter(Boolean) as Array<{ role: 'filling' | 'topping'; option_name: string; extra_price: number }>,
+        })),
       }));
 
-      await Promise.allSettled([
-        allItemOptionsPayload.length > 0
-          ? supabase.from('order_item_options').insert(allItemOptionsPayload)
-          : Promise.resolve(),
-        allPieceOptionsPayload.length > 0
-          ? supabase.from('order_item_piece_options').insert(allPieceOptionsPayload)
-          : Promise.resolve(),
-        paymentsPayload.length > 0
-          ? supabase.from('payments').insert(paymentsPayload)
-          : Promise.resolve(),
-      ]);
+      const result = await posService.createOrderFull({
+        order_type: input.orderType,
+        customer_name: input.customerName || undefined,
+        customer_phone: input.customerPhone || undefined,
+        address_snapshot: input.customerAddress ? { address: input.customerAddress } : null,
+        delivery_fee: input.deliveryFee || 0,
+        discount_type:
+          input.discountType === 'percentage'
+            ? 'percent'
+            : input.discountType === 'fixed'
+            ? 'amount'
+            : null,
+        discount_value: input.discountValue || 0,
+        items: payloadItems,
+        payments: input.payments.map((p) => ({
+          method_name: p.method_name,
+          is_cash: p.is_cash,
+          amount: p.amount,
+        })),
+      });
 
       // تحديث فوري للشفت محلياً أيضاً لضمان استجابة الشاشات فوراً
       shiftService.recordOrderPayment({
         total: input.total,
         payments: input.payments,
-        order_id: orderId,
+        order_id: result.id,
       });
 
       if (typeof window !== 'undefined') {
@@ -281,7 +135,7 @@ export const orderService = {
         window.dispatchEvent(new CustomEvent('mrdonuts:shift-updated'));
       }
 
-      return { id: orderId, order_number: newOrder.order_number };
+      return { id: result.id, order_number: result.order_number };
     }
 
     // ========================================================

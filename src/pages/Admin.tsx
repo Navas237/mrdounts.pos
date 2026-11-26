@@ -19,15 +19,19 @@ import {
   Edit2,
   Trash2,
   X,
+  ChefHat,
 } from 'lucide-react';
 import { PermissionGate } from '@/components/shared/PermissionGate';
 import { UsersManagement } from '@/components/admin/UsersManagement';
 import { SectionsMenuManagement } from '@/components/admin/SectionsMenuManagement';
+import { RecipesManagement } from '@/components/admin/RecipesManagement';
+import { PaymentMethodsManagement } from '@/components/admin/PaymentMethodsManagement';
 
 const TABS = [
   { id: 'donuts', label: 'هيكل وقواعد الدونتس', icon: Layers, perm: 'menu.manage' },
   { id: 'departments', label: 'الأقسام والمنيو', icon: UtensilsCrossed, perm: 'menu.manage' },
   { id: 'payments', label: 'طرق الدفع', icon: CreditCard, perm: 'settings.manage' },
+  { id: 'recipes', label: 'الرسبي', icon: ChefHat, perm: 'menu.manage' },
   { id: 'printers', label: 'طابعات الأقسام', icon: Printer, perm: 'print.manage' },
   { id: 'users', label: 'المستخدمون والصلاحيات', icon: Users, perm: 'users.manage' },
 ];
@@ -493,29 +497,9 @@ export const Admin: React.FC = () => {
         {/* ========================================================
             التبويب 3: طرق الدفع
             ======================================================== */}
-        {activeTab === 'payments' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-line pb-2.5">
-              <div>
-                <h3 className="text-sm font-extrabold text-ink">طرق الدفع المعرفة</h3>
-              </div>
-            </div>
+        {activeTab === 'payments' && <PaymentMethodsManagement />}
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {[
-                { name: 'نقدي (كاش)', is_cash: true },
-                { name: 'فيزا / بطاقة بنكية', is_cash: false },
-                { name: 'إنستاباي (InstaPay)', is_cash: false },
-                { name: 'فودافون كاش (Vodafone Cash)', is_cash: false },
-              ].map((p) => (
-                <div key={p.name} className="p-2.5 rounded-lg bg-surface-2/40 border border-line text-xs font-bold text-ink flex items-center justify-between">
-                  <span>{p.name}</span>
-                  <span className="text-[11px] text-ink-muted font-normal">{p.is_cash ? 'كاش' : 'إلكتروني'}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {activeTab === 'recipes' && <RecipesManagement />}
 
         {/* ========================================================
             التبويب 4: طابعات الأقسام

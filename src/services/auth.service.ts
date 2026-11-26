@@ -56,6 +56,8 @@ export const MOCK_PERSONAS: MockUserPersona[] = [
         'screen.customers',
         'screen.drawer',
         'screen.admin',
+        'screen.orders',
+        'screen.reports',
         'screen.callcenter',
       ],
       actions: [
@@ -273,6 +275,8 @@ export const authService = {
           'screen.customers',
           'screen.drawer',
           'screen.admin',
+          'screen.orders',
+          'screen.reports',
           'screen.callcenter',
         ];
         actions = [

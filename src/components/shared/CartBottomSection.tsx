@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCart } from '@/hooks/useCart';
 import { formatCurrency } from '@/utils/formatters';
 import { customerService } from '@/services/customer.service';
+import { PaymentSection } from './PaymentSection';
 import { orderService } from '@/services/order.service';
 import {
   Trash2,
@@ -55,6 +56,7 @@ export const CartBottomSection: React.FC = () => {
     updateQuantity,
     clearCart,
     addPayment,
+    payments,
   } = useCart();
 
   const queryClient = useQueryClient();
@@ -134,13 +136,24 @@ export const CartBottomSection: React.FC = () => {
     setIsSubmitting(true);
     setCheckoutError(null);
     try {
-      const paymentItem = {
-        id: `pay-${Date.now()}`,
-        method_name: 'نقدي (كاش)',
-        is_cash: true,
-        amount: total,
-      };
-      addPayment(paymentItem);
+      // لو لم تُضف دفعات يدوياً: دفعة كاش كاملة افتراضياً (أسرع مسار)
+      // لو أُضيفت دفعات: لازم تغطي الإجمالي (التقسيم مسموح)
+      let finalPayments = payments;
+      if (finalPayments.length === 0) {
+        finalPayments = [
+          {
+            id: `pay-${Date.now()}`,
+            method_name: 'نقدي (كاش)',
+            is_cash: true,
+            amount: total,
+          },
+        ];
+        addPayment(finalPayments[0]);
+      }
+      const paidSum = finalPayments.reduce((sum, p) => sum + p.amount, 0);
+      if (paidSum + 0.01 < total) {
+        throw new Error(`المدفوع (${paidSum}) أقل من الإجمالي (${total}). أكمل باقي المبلغ أو احذف الدفعات.`);
+      }
 
       const result = await orderService.createOrder({
         orderType,
@@ -156,7 +169,7 @@ export const CartBottomSection: React.FC = () => {
         deliveryFee: orderType === 'delivery' ? deliveryFee : 0,
         total,
         items,
-        payments: [paymentItem],
+        payments: finalPayments,
       });
 
       setCreatedOrderNumber(result.order_number || 1);
@@ -357,6 +370,9 @@ export const CartBottomSection: React.FC = () => {
               </div>
             </div>
 
+            {/* طرق الدفع والتقسيم */}
+            <PaymentSection />
+
             {/* زر تأكيد الأوردر */}
             <button
               type="button"
@@ -392,6 +408,9 @@ export const CartBottomSection: React.FC = () => {
               ))}
             </div>
           )}
+
+          {/* طرق الدفع والتقسيم */}
+          <PaymentSection />
 
           {/* شريط الحساب المالي الكامل الأفقي والسريع بنمط الكاشير */}
           <div className="rounded-xl border border-line bg-surface-2/60 p-3 flex flex-col sm:flex-row items-center justify-between gap-3">

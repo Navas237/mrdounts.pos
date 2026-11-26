@@ -23,6 +23,8 @@ import {
   Menu,
   X,
   LayoutGrid,
+  ClipboardList,
+  BarChart3,
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -34,6 +36,8 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Coins,
   Users,
   Settings,
+  ClipboardList,
+  BarChart3,
 };
 
 export const Navbar: React.FC = () => {
