@@ -544,30 +544,18 @@ export const kitchenService = {
 
   async toggleBoxReady(orderId: string, boxId: string): Promise<void> {
     if (isLiveSupabaseConfigured && supabase) {
-      try {
-        const { data: cur, error: readErr } = await supabase
-          .from('order_items')
-          .select('status')
-          .eq('id', boxId)
-          .maybeSingle();
-        if (readErr) throw readErr;
-        const makeReady = cur?.status !== 'ready';
-        const { error: updErr } = await supabase
-          .from('order_items')
-          .update(
-            makeReady
-              ? { status: 'ready', ready_at: new Date().toISOString() }
-              : { status: 'preparing', ready_at: null }
-          )
-          .eq('id', boxId);
-        if (updErr) throw updErr;
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('mrdonuts:kitchen-updated'));
-        }
-        return;
-      } catch (err) {
-        console.warn('Failed to toggle donut box readiness in Supabase:', err);
+      // التبديل عبر RPC بصلاحية المحطة فقط (بدون order.create/edit).
+      // السيرفر يرفض "جاهز" ما دامت قطع محشية بانتظار الحقن، وأي فشل يظهر
+      // للمستخدم بدل الوقوع لحالة محلية جاهزة زائفة.
+      const { error } = await supabase.rpc('toggle_donut_box_ready', { p_item: boxId });
+      if (error) {
+        console.error('Failed to toggle donut box readiness in Supabase:', error);
+        throw new Error(error.message);
       }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mrdonuts:kitchen-updated'));
+      }
+      return;
     }
     mockDonutToppingOrdersState = mockDonutToppingOrdersState.map((ord) => {
       if (ord.order_id !== orderId && ord.id !== orderId) return ord;
@@ -591,14 +579,26 @@ export const kitchenService = {
 
   async finishDonutToppingOrder(orderId: string): Promise<void> {
     if (isLiveSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('order_items')
-          .update({ status: 'ready', ready_at: new Date().toISOString() })
-          .eq('order_id', orderId);
-      } catch (err) {
-        console.warn('Failed to update order items status in Supabase:', err);
+      // إنهاء الأوردر = تجهيز كل بوكساته عبر نفس RPC المحمي ببوابة الحقن
+      // وبصلاحية المحطة. أول رفض من السيرفر يوقف ويظهر الخطأ، والبوكسات التي
+      // جهّزت فعلاً تبقى جاهزة (حالتها الحقيقية).
+      const liveOrders = await this.getDonutToppingOrders();
+      const ord = liveOrders.find((o) => o.order_id === orderId || o.id === orderId);
+      const pendingBoxes = (ord?.boxes || []).filter((b) => !b.is_ready && b.id);
+      for (const box of pendingBoxes) {
+        const { error } = await supabase.rpc('toggle_donut_box_ready', { p_item: box.id });
+        if (error) {
+          console.error('Failed to finish donut topping order in Supabase:', error);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('mrdonuts:kitchen-updated'));
+          }
+          throw new Error(error.message);
+        }
       }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mrdonuts:kitchen-updated'));
+      }
+      return;
     }
 
     mockDonutToppingOrdersState = mockDonutToppingOrdersState.filter(

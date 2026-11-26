@@ -128,6 +128,10 @@ export function useDonutTopping() {
       queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: ['kitchen', 'donutInjection'] });
     },
+    onError: () => {
+      // فشل التبديل (مثل رفض INJECTION_INCOMPLETE): أعد الجلب حتى لا تبقى حالة جاهز محلية زائفة
+      queryClient.invalidateQueries({ queryKey });
+    },
   });
 
   const finishOrderMutation = useMutation({
@@ -137,6 +141,9 @@ export function useDonutTopping() {
       queryClient.invalidateQueries({ queryKey: ['kitchen', 'donutInjection'] });
       queryClient.invalidateQueries({ queryKey: ['pickup', 'orders'] });
     },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
   });
 
   return {
@@ -145,8 +152,12 @@ export function useDonutTopping() {
     isError,
     refetch,
     toggleBoxReady: (orderId: string, boxId: string) =>
-      toggleBoxMutation.mutateAsync({ orderId, boxId }),
-    finishOrder: finishOrderMutation.mutateAsync,
+      toggleBoxMutation.mutate({ orderId, boxId }),
+    toggleError: toggleBoxMutation.error,
+    resetToggleError: () => toggleBoxMutation.reset(),
+    finishOrder: (orderId: string) => finishOrderMutation.mutate(orderId),
+    finishError: finishOrderMutation.error,
+    resetFinishError: () => finishOrderMutation.reset(),
     isFinishing: finishOrderMutation.isPending,
   };
 }

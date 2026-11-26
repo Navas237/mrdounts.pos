@@ -15,7 +15,7 @@ import {
 import { DonutToppingBox, DonutToppingOrder } from '@/services/kitchen.service';
 
 export const DonutsToppingKitchen: React.FC = () => {
-  const { orders, isLoading, isError, refetch, toggleBoxReady, finishOrder, isFinishing } = useDonutTopping();
+  const { orders, isLoading, isError, refetch, toggleBoxReady, toggleError, resetToggleError, finishOrder, finishError, resetFinishError, isFinishing } = useDonutTopping();
   const { isPaused, pausedAt, togglePause } = useStationPause('donut_topping');
 
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>('all');
@@ -45,6 +45,16 @@ export const DonutsToppingKitchen: React.FC = () => {
       </div>
     );
   }
+
+  // فشل تبديل جاهزية بوكس أو إنهاء أوردر (مثل رفض السيرفر قبل اكتمال الحقن) يظهر هنا
+  const writeError = toggleError || finishError;
+  const resetWriteError = () => { resetToggleError(); resetFinishError(); };
+  const toggleErrorBanner = writeError && (
+    <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-bold mb-3">
+      <span>تعذر تحديث الجاهزية: {writeError.message}</span>
+      <button type="button" onClick={resetWriteError} className="shrink-0 underline">إخفاء</button>
+    </div>
+  );
 
   // عند الإيقاف المؤقت، يتم تجميد الطلبات الحالية ولا يزيد العدد مع دخول طلبات جديدة
   const visibleOrders = isPaused && pausedAt
@@ -105,6 +115,8 @@ export const DonutsToppingKitchen: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {toggleErrorBanner}
 
       {/* تنبيه حالة التوقف المؤقت وتجميد الطلبات */}
       {isPaused && (
