@@ -42,10 +42,12 @@ export interface DonutAggregatedBatch {
 }
 
 export interface DonutToppingPiece {
+  id?: string;
   piece_number: number;
   topping_sauce_name: string;
   stuffing_sauce_name: string;
   is_stuffed: boolean;
+  injected_at?: string | null;
 }
 
 export interface DonutToppingBox {
@@ -78,6 +80,7 @@ export interface StuffingSauceAggregate {
   donut_type: 'regular' | 'mini' | 'stuffed';
   donut_type_label: string;
   total_pieces: number;
+  pending_pieces: number;
   regular_pieces: number;
   mini_pieces: number;
   stuffed_pieces?: number;
@@ -458,6 +461,7 @@ export const kitchenService = {
                 id,
                 piece_no,
                 piece_kind,
+                injected_at,
                 order_item_piece_options (
                   role,
                   option_name
@@ -494,7 +498,9 @@ export const kitchenService = {
                   const fillingOpt = opts.find((o: any) => o.role === 'filling');
 
                   return {
+                    id: p.id,
                     piece_number: p.piece_no,
+                    injected_at: p.injected_at ?? null,
                     topping_sauce_name: toppingOpt?.option_name || 'توبنج',
                     stuffing_sauce_name: fillingOpt?.option_name || (p.piece_kind === 'stuffed' ? 'محشي' : 'سادة'),
                     is_stuffed: p.piece_kind === 'stuffed',
@@ -626,6 +632,7 @@ export const kitchenService = {
       donut_type: 'regular' | 'mini' | 'stuffed';
       donut_type_label: string;
       count: number;
+      pending: number;
     }>();
 
     let totalPieces = 0;
@@ -667,8 +674,10 @@ export const kitchenService = {
             donut_type: dType,
             donut_type_label: typeLabel,
             count: 0,
+            pending: 0,
           };
           existing.count += 1;
+          if (!piece.injected_at) existing.pending += 1;
           itemMap.set(key, existing);
 
           // تجميع خاص بالأوردر
@@ -704,10 +713,15 @@ export const kitchenService = {
         donut_type: data.donut_type,
         donut_type_label: data.donut_type_label,
         total_pieces: data.count,
+        pending_pieces: data.pending,
         regular_pieces: data.donut_type === 'regular' ? data.count : 0,
         mini_pieces: data.donut_type === 'mini' ? data.count : 0,
         stuffed_pieces: data.donut_type === 'stuffed' ? data.count : 0,
-        is_completed: !!mockCompletedInjectionSauces[key] || !!mockCompletedInjectionSauces[data.sauce_name],
+        // وضع لايف: مكتمل فقط لو مفيش قطع pending. وضع الموك: العلامة المحلية.
+        is_completed:
+          !!mockCompletedInjectionSauces[key] ||
+          !!mockCompletedInjectionSauces[data.sauce_name] ||
+          (data.count > 0 && data.pending === 0),
       })
     );
 
@@ -731,8 +745,51 @@ export const kitchenService = {
     };
   },
 
-  async toggleInjectionSauce(sauceName: string): Promise<void> {
-    mockCompletedInjectionSauces[sauceName] = !mockCompletedInjectionSauces[sauceName];
+  async toggleInjectionSauce(sauceKey: string): Promise<void> {
+    if (isLiveSupabaseConfigured && supabase) {
+      // المفتاح بالشكل sauce__donut_type. الإنجاز في اتجاه واحد فقط (طلب المستخدم):
+      // الضغط يعلّم كل القطع الـ pending من المفتاح ده كمحقونة، وأي ضغطة تانية
+      // بعد الاكتمال لا تلغي ولا تكرر. القطع الجديدة (injected_at = null) تفضل pending.
+      const [sauceName, dType = 'regular'] = sauceKey.split('__');
+      const orders = await this.getDonutToppingOrders();
+      const matched: { id: string; injected_at?: string | null }[] = [];
+      orders.forEach((ord) =>
+        ord.boxes.forEach((box) => {
+          if ((box.donut_type || 'regular') !== dType) return;
+          box.pieces.forEach((p) => {
+            if (!p.id) return;
+            const isStuffed = p.is_stuffed && p.stuffing_sauce_name && p.stuffing_sauce_name !== 'سادة';
+            const pieceSauce = isStuffed ? p.stuffing_sauce_name : 'سادة (بدون حشو)';
+            if (pieceSauce === sauceName) matched.push({ id: p.id, injected_at: p.injected_at });
+          });
+        })
+      );
+      if (matched.length === 0) return;
+
+      let userId: string | null = null;
+      try {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem('mrdounts_session') : null;
+        userId = raw ? JSON.parse(raw)?.profile?.id ?? null : null;
+      } catch {
+        userId = null;
+      }
+
+      const pending = matched.filter((m) => !m.injected_at);
+      if (pending.length === 0) return; // مكتمل بالفعل: الضغط الإضافي لا يغير شيئاً
+      const { error: updErr } = await supabase
+        .from('order_item_pieces')
+        .update({ injected_at: new Date().toISOString(), injected_by: userId })
+        .in('id', pending.map((m) => m.id));
+      if (updErr) {
+        console.error('Failed to persist injection state in Supabase:', updErr);
+        throw new Error(updErr.message);
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mrdonuts:kitchen-updated'));
+      }
+      return;
+    }
+    if (!mockCompletedInjectionSauces[sauceKey]) mockCompletedInjectionSauces[sauceKey] = true;
   },
 
   async toggleInjectionOrder(orderId: string): Promise<void> {

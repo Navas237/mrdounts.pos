@@ -178,6 +178,9 @@ export function useDonutInjection(pausedAt?: string | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
     },
+    onError: (err) => {
+      console.error('Failed to persist injection completion:', err);
+    },
   });
 
   const toggleOrderMutation = useMutation({
@@ -199,7 +202,7 @@ export function useDonutInjection(pausedAt?: string | null) {
     isLoading,
     isError,
     refetch,
-    toggleSauce: toggleSauceMutation.mutateAsync,
+    toggleSauce: (sauceKey: string) => toggleSauceMutation.mutate(sauceKey),
     toggleOrder: toggleOrderMutation.mutateAsync,
   };
 }

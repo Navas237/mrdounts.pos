@@ -274,9 +274,11 @@ export const DonutsInjectionKitchen: React.FC = () => {
 
                   <div className="text-left shrink-0 flex items-baseline gap-0.5 pl-1">
                     <span className="text-lg sm:text-xl font-black font-mono text-brand-700 leading-none">
-                      {sauce.total_pieces}
+                      {sauce.is_completed ? sauce.total_pieces : sauce.pending_pieces}
                     </span>
-                    <span className="text-[10px] font-bold text-ink-muted">قطع</span>
+                    <span className="text-[10px] font-bold text-ink-muted">
+                      {sauce.is_completed ? 'قطع' : 'متبقي'}
+                    </span>
                   </div>
                 </div>
               );
