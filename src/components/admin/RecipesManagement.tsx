@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
 import { posService, isPosDemoMode } from '@/services/pos.service';
-import { demoRecipes } from '@/services/pos.fixtures';
+import { demoRecipes, demoTargetOptions } from '@/services/pos.fixtures';
 import { Plus, X, Save, AlertCircle, ChefHat } from 'lucide-react';
 
 interface RecipeTarget {
@@ -16,6 +16,14 @@ interface IngredientRow {
   quantity: number;
   unit: string;
   per_unit: 'item' | 'piece';
+  /** صوص/إضافة محددة: يُحسب المكون فقط عند اختيارها فعلياً؛ فارغ = أساسي على كل وحدة */
+  option_name?: string | null;
+  role?: 'filling' | 'topping' | null;
+}
+
+interface TargetOption {
+  option_name: string;
+  role: 'filling' | 'topping' | null;
 }
 
 interface Recipe {
@@ -32,6 +40,7 @@ export const RecipesManagement: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<RecipeTarget | null>(null);
   const [ingredients, setIngredients] = useState<IngredientRow[]>([]);
+  const [targetOptions, setTargetOptions] = useState<TargetOption[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -43,7 +52,7 @@ export const RecipesManagement: React.FC = () => {
         target_type: r.target_type,
         id: r.menu_item_id || r.donut_type_id,
         name: r.target_type === 'donut_type' ? `دونتس ${r.target_name}` : r.target_name,
-        department_name: r.target_type === 'donut_type' ? 'دونتس' : 'وافل',
+        department_name: r.target_type === 'donut_type' ? 'دونتس' : (r.department_name || 'وافل'),
       })));
       return;
     }
@@ -79,16 +88,53 @@ export const RecipesManagement: React.FC = () => {
       t.target_type === 'menu_item' ? r.menu_item_id === t.id : r.donut_type_id === t.id
     );
 
-  const openEditor = (t: RecipeTarget) => {
+  const openEditor = async (t: RecipeTarget) => {
     setSelectedTarget(t);
     const existing = recipeFor(t);
     setIngredients(
       existing
         ? existing.ingredients.map((i) => ({ ...i }))
-        : [{ ingredient_name: '', quantity: 0, unit: 'جرام', per_unit: t.target_type === 'donut_type' ? 'piece' : 'item' }]
+        : [{ ingredient_name: '', quantity: 0, unit: 'جرام', per_unit: t.target_type === 'donut_type' ? 'piece' : 'item', option_name: null, role: null }]
     );
     setMessage(null);
+    // الصوصات/الإضافات المتاحة للصنف — تُربط بها المكونات اختيارياً
+    if (isPosDemoMode) {
+      setTargetOptions(demoTargetOptions[t.id] || []);
+      return;
+    }
+    if (!supabase) { setTargetOptions([]); return; }
+    try {
+      if (t.target_type === 'donut_type') {
+        const { data } = await supabase
+          .from('donut_type_groups')
+          .select('role, option_groups(options(name, is_active))')
+          .eq('donut_type_id', id(t));
+        const opts: TargetOption[] = [];
+        for (const g of (data as any[]) || []) {
+          for (const o of g.option_groups?.options || []) {
+            if (o.is_active !== false) opts.push({ option_name: o.name, role: g.role });
+          }
+        }
+        setTargetOptions(opts);
+      } else {
+        const { data } = await supabase
+          .from('item_option_groups')
+          .select('option_groups(options(name, is_active))')
+          .eq('item_id', id(t));
+        const opts: TargetOption[] = [];
+        for (const g of (data as any[]) || []) {
+          for (const o of g.option_groups?.options || []) {
+            if (o.is_active !== false) opts.push({ option_name: o.name, role: null });
+          }
+        }
+        setTargetOptions(opts);
+      }
+    } catch {
+      setTargetOptions([]);
+    }
   };
+
+  const id = (t: RecipeTarget) => t.id;
 
   const handleSave = async () => {
     if (!selectedTarget) return;
@@ -100,7 +146,14 @@ export const RecipesManagement: React.FC = () => {
         target_type: selectedTarget.target_type,
         menu_item_id: selectedTarget.target_type === 'menu_item' ? selectedTarget.id : undefined,
         donut_type_id: selectedTarget.target_type === 'donut_type' ? selectedTarget.id : undefined,
-        ingredients: valid,
+        ingredients: valid.map((i) => ({
+          ingredient_name: i.ingredient_name.trim(),
+          quantity: i.quantity,
+          unit: i.unit,
+          per_unit: i.per_unit,
+          option_name: i.option_name || undefined,
+          role: i.option_name ? i.role || undefined : undefined,
+        })),
       });
       setMessage('تم حفظ الوصفة');
       await load();
@@ -237,6 +290,42 @@ export const RecipesManagement: React.FC = () => {
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
+                </div>
+              ))}
+            </div>
+
+            {/* ربط كل مكون بصوص/إضافة محددة (يُحسب عند اختيارها فعلاً) أو تركه أساسياً */}
+            <div className="space-y-1.5">
+              {ingredients.map((ing, idx) => (
+                <div key={`bind-${idx}`} className="flex items-center gap-1.5 pr-1">
+                  <span className="text-[10px] text-ink-muted w-20 truncate">{ing.ingredient_name || '—'}</span>
+                  <select
+                    value={ing.option_name ? `${ing.option_name}|${ing.role || ''}` : ''}
+                    onChange={(e) => {
+                      const next = [...ingredients];
+                      const v = e.target.value;
+                      if (!v) {
+                        next[idx] = { ...ing, option_name: null, role: null };
+                      } else {
+                        const sep = v.lastIndexOf('|');
+                        const on = v.slice(0, sep);
+                        const rl = v.slice(sep + 1);
+                        next[idx] = { ...ing, option_name: on, role: rl === '' ? null : (rl as 'filling' | 'topping') };
+                      }
+                      setIngredients(next);
+                    }}
+                    className="flex-1 py-1 px-2 rounded-lg border border-line bg-surface text-[11px] font-bold text-ink focus:outline-none focus:border-brand-700"
+                  >
+                    <option value="">
+                      {selectedTarget.target_type === 'donut_type' ? 'أساسي — على كل قطعة' : 'أساسي — على كل وحدة'}
+                    </option>
+                    {targetOptions.map((o) => (
+                      <option key={`${o.option_name}|${o.role || ''}`} value={`${o.option_name}|${o.role || ''}`}>
+                        عند اختيار: {o.option_name}
+                        {o.role ? (o.role === 'filling' ? ' (حشوة)' : ' (توبنج)') : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               ))}
             </div>

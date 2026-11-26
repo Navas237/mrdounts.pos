@@ -71,43 +71,49 @@ export const demoShiftReport = {
   shift_id: SHIFT,
   status: 'open',
   opened_at: new Date(Date.now() - 8 * 3600000).toISOString(),
-  opening_cash: 200,
-  orders: { count: 47, subtotal: 4120, discounts: 130, tax: 0, delivery_fees: 90, net_total: 4080 },
-  cancelled_orders: 2,
+  opening_cash: 500,
+  orders: { count: 168, subtotal: 21500, discounts: 650, tax: 0, delivery_fees: 450, net_total: 21300 },
+  cancelled_orders: 3,
   orders_by_type: [
-    { type: 'takeaway', count: 26, total: 2310 },
-    { type: 'dine_in', count: 15, total: 1290 },
-    { type: 'delivery', count: 6, total: 480 },
+    { type: 'delivery', count: 28, total: 2900 },
+    { type: 'dine_in', count: 45, total: 5700 },
+    { type: 'takeaway', count: 63, total: 8400 },
+    { type: 'pickup', count: 32, total: 4300 },
   ],
   payments_by_method: [
-    { method: 'كاش', is_cash: true, total: 1980, count: 22 },
-    { method: 'فيزا', is_cash: false, total: 1350, count: 15 },
-    { method: 'إنستاباي', is_cash: false, total: 750, count: 10 },
+    { method: 'كاش', is_cash: true, total: 9850, count: 70 },
+    { method: 'فيزا', is_cash: false, total: 7200, count: 58 },
+    { method: 'إنستاباي', is_cash: false, total: 4250, count: 40 },
   ],
-  movements_in: 300,
-  movements_out: 150,
+  cash_change: 0,
+  net_cash: 9850,
+  movements_in: 800,
+  movements_out: 400,
   expected_cash: null,
   counted_cash: null,
   cash_difference: null,
 };
 
 export const demoItemSales = {
+  // الأرقام متوافقة مع demoShiftReport: إيراد الأصناف الكلي 21,500 = الإجمالي قبل الخصم
   donut_boxes: [
-    { name: 'بوكس عادي 6 قطعة', pieces: 6, boxes: 18, revenue: 2160 },
-    { name: 'بوكس ميني 12 قطعة', pieces: 12, boxes: 9, revenue: 990 },
-    { name: 'بوكس محشي 4 قطع', pieces: 4, boxes: 5, revenue: 460 },
+    { name: 'بوكس عادي 6 قطعة', pieces: 6, boxes: 40, revenue: 4800 },
+    { name: 'بوكس ميني 12 قطعة', pieces: 12, boxes: 25, revenue: 2750 },
+    { name: 'بوكس محشي 4 قطع', pieces: 4, boxes: 30, revenue: 2760 },
   ],
-  donut_pieces_by_sauce: [
-    { sauce: 'شوكولاتة', role: 'topping', pieces: 84 },
-    { sauce: 'لوتس', role: 'topping', pieces: 52 },
-    { sauce: 'نوتيلا', role: 'stuffing', pieces: 38 },
-    { sauce: 'كراميل', role: 'stuffing', pieces: 21 },
+  // قطع الدونتس حسب النوع — مشتقة من البوكسات أعلاه: 40×6 + 25×12 + 30×4 = 660 قطعة
+  donut_pieces_by_type: [
+    { name: 'عادي', pieces: 240 },
+    { name: 'ميني', pieces: 300 },
+    { name: 'محشي', pieces: 120 },
   ],
   items: [
-    { department: 'وافل', name: 'وافل كلاسيك', size: null, quantity: 21, revenue: 1050 },
-    { department: 'وافل', name: 'وافل نوتيلا', size: null, quantity: 12, revenue: 780 },
-    { department: 'مشروبات', name: 'قهوة', size: 'وسط', quantity: 33, revenue: 990 },
-    { department: 'مشروبات', name: 'ميلك شيك فراولة', size: null, quantity: 8, revenue: 440 },
+    { department: 'وافل', name: 'وافل كلاسيك', size: null, quantity: 45, revenue: 2250 },
+    { department: 'وافل', name: 'وافل نوتيلا', size: null, quantity: 38, revenue: 2470 },
+    { department: 'مشروبات', name: 'قهوة', size: 'وسط', quantity: 60, revenue: 1800 },
+    { department: 'مشروبات', name: 'إيس لاتيه', size: null, quantity: 45, revenue: 1800 },
+    { department: 'مشروبات', name: 'ميلك شيك فراولة', size: null, quantity: 38, revenue: 2090 },
+    { department: 'مشروبات', name: 'هوت شوكولات', size: null, quantity: 26, revenue: 780 },
   ],
 };
 
@@ -117,37 +123,93 @@ export const demoPaymentMethods = [
   { id: 'demo-pm-3', name: 'إنستاباي', is_cash: false, sort_order: 3, is_active: true },
 ];
 
+// الاستهلاك محسوب من الرسبي التجريبي أدناه × الصوص المختار فعلياً لكل قطعة/صنف:
+// عادي 240 قطعة: 140 شوكولاتة + 60 لوتس + 40 سادة — ميني 300: 180 لوتس + 120 شوكولاتة
+// محشي 120: 80 نوتيلا + 30 كراميل + 10 فراولة (فراولة بدون كمية في الرسبي)
+// وافل كلاسيك 45: 30 بشوكولاتة + 15 بلوتس — وافل نوتيلا 38 كلها نوتيلا — إيس لاتيه 45: 25 بكراميل
 export const demoSauceConsumption = {
   consumption: [
-  { ingredient: 'شوكولاتة', unit: 'جرام', total_consumed: 640, breakdown: [
-    { target: 'عادي', units: 84, consumed: 420 },
-    { target: 'وافل كلاسيك', units: 21, consumed: 210 },
-    { target: 'ميني', units: 2, consumed: 10 },
+  { ingredient: 'نوتيلا', unit: 'جرام', total_consumed: 1400, breakdown: [
+    { target: 'محشي', kind: 'option', units: 80, consumed: 640 },
+    { target: 'وافل نوتيلا', kind: 'option', units: 38, consumed: 760 },
   ]},
-  { ingredient: 'نوتيلا', unit: 'جرام', total_consumed: 490, breakdown: [
-    { target: 'محشي', units: 38, consumed: 380 },
-    { target: 'وافل نوتيلا', units: 12, consumed: 110 },
+  { ingredient: 'شوكولاتة', unit: 'جرام', total_consumed: 1170, breakdown: [
+    { target: 'وافل كلاسيك', kind: 'option', units: 30, consumed: 450 },
+    { target: 'عادي', kind: 'option', units: 140, consumed: 420 },
+    { target: 'ميني', kind: 'option', units: 120, consumed: 300 },
   ]},
-  { ingredient: 'لوتس', unit: 'جرام', total_consumed: 260, breakdown: [
-    { target: 'عادي', units: 52, consumed: 260 },
+  { ingredient: 'لوتس', unit: 'جرام', total_consumed: 690, breakdown: [
+    { target: 'ميني', kind: 'option', units: 180, consumed: 360 },
+    { target: 'وافل كلاسيك', kind: 'option', units: 15, consumed: 180 },
+    { target: 'عادي', kind: 'option', units: 60, consumed: 150 },
   ]},
-  { ingredient: 'كراميل', unit: 'جرام', total_consumed: 105, breakdown: [
-    { target: 'محشي', units: 21, consumed: 105 },
+  { ingredient: 'كراميل', unit: 'مل', total_consumed: 430, breakdown: [
+    { target: 'إيس لاتيه', kind: 'option', units: 25, consumed: 250 },
+    { target: 'محشي', kind: 'option', units: 30, consumed: 180 },
   ]},
   ],
   missing_recipes: ['قهوة', 'ميلك شيك فراولة'],
+  unmapped_options: ['فراولة (حشوة محشي)'],
 };
 
 export const demoRecipes = [
   {
     id: 'demo-recipe-1', target_type: 'donut_type', donut_type_id: 'demo-dt-1', target_name: 'عادي', is_active: true,
     ingredients: [
-      { ingredient_name: 'شوكولاتة', quantity: 5, unit: 'جرام', per_unit: 'piece' },
-      { ingredient_name: 'لوتس', quantity: 5, unit: 'جرام', per_unit: 'piece' },
+      { ingredient_name: 'شوكولاتة', quantity: 3, unit: 'جرام', per_unit: 'piece', option_name: 'شوكولاتة', role: 'topping' },
+      { ingredient_name: 'لوتس', quantity: 2.5, unit: 'جرام', per_unit: 'piece', option_name: 'لوتس', role: 'topping' },
     ],
   },
   {
-    id: 'demo-recipe-2', target_type: 'menu_item', menu_item_id: 'demo-mi-1', target_name: 'وافل كلاسيك', is_active: true,
-    ingredients: [{ ingredient_name: 'شوكولاتة', quantity: 10, unit: 'جرام', per_unit: 'item' }],
+    id: 'demo-recipe-2', target_type: 'donut_type', donut_type_id: 'demo-dt-2', target_name: 'ميني', is_active: true,
+    ingredients: [
+      { ingredient_name: 'لوتس', quantity: 2, unit: 'جرام', per_unit: 'piece', option_name: 'لوتس', role: 'topping' },
+      { ingredient_name: 'شوكولاتة', quantity: 2.5, unit: 'جرام', per_unit: 'piece', option_name: 'شوكولاتة', role: 'topping' },
+    ],
+  },
+  {
+    id: 'demo-recipe-3', target_type: 'donut_type', donut_type_id: 'demo-dt-3', target_name: 'محشي', is_active: true,
+    ingredients: [
+      { ingredient_name: 'نوتيلا', quantity: 8, unit: 'جرام', per_unit: 'piece', option_name: 'نوتيلا', role: 'filling' },
+      { ingredient_name: 'كراميل', quantity: 6, unit: 'مل', per_unit: 'piece', option_name: 'كراميل', role: 'filling' },
+    ],
+  },
+  {
+    id: 'demo-recipe-4', target_type: 'menu_item', menu_item_id: 'demo-mi-1', target_name: 'وافل كلاسيك', department_name: 'وافل', is_active: true,
+    ingredients: [
+      { ingredient_name: 'شوكولاتة', quantity: 15, unit: 'جرام', per_unit: 'item', option_name: 'شوكولاتة', role: null },
+      { ingredient_name: 'لوتس', quantity: 12, unit: 'جرام', per_unit: 'item', option_name: 'لوتس', role: null },
+    ],
+  },
+  {
+    id: 'demo-recipe-5', target_type: 'menu_item', menu_item_id: 'demo-mi-2', target_name: 'وافل نوتيلا', department_name: 'وافل', is_active: true,
+    ingredients: [{ ingredient_name: 'نوتيلا', quantity: 20, unit: 'جرام', per_unit: 'item', option_name: 'نوتيلا', role: null }],
+  },
+  {
+    id: 'demo-recipe-6', target_type: 'menu_item', menu_item_id: 'demo-mi-3', target_name: 'إيس لاتيه', department_name: 'مشروبات', is_active: true,
+    ingredients: [{ ingredient_name: 'كراميل', quantity: 10, unit: 'مل', per_unit: 'item', option_name: 'كراميل', role: null }],
   },
 ];
+
+// الصوصات المتاحة لكل صنف في محرر الرسبي (وضع العرض) — في التشغيل الحقيقي تُجلب
+// من قوائم الخيارات المربوطة بالصنف/النوع
+export const demoTargetOptions: Record<string, Array<{ option_name: string; role: 'filling' | 'topping' | null }>> = {
+  'demo-dt-1': [
+    { option_name: 'شوكولاتة', role: 'topping' }, { option_name: 'لوتس', role: 'topping' },
+    { option_name: 'كراميل', role: 'topping' }, { option_name: 'فراولة', role: 'topping' },
+  ],
+  'demo-dt-2': [
+    { option_name: 'شوكولاتة', role: 'topping' }, { option_name: 'لوتس', role: 'topping' },
+    { option_name: 'فراولة', role: 'topping' },
+  ],
+  'demo-dt-3': [
+    { option_name: 'نوتيلا', role: 'filling' }, { option_name: 'كراميل', role: 'filling' },
+    { option_name: 'فراولة', role: 'filling' }, { option_name: 'لوتس', role: 'filling' },
+  ],
+  'demo-mi-1': [
+    { option_name: 'شوكولاتة', role: null }, { option_name: 'لوتس', role: null },
+    { option_name: 'كراميل', role: null }, { option_name: 'مكسرات', role: null },
+  ],
+  'demo-mi-2': [{ option_name: 'نوتيلا', role: null }, { option_name: 'مكسرات', role: null }],
+  'demo-mi-3': [{ option_name: 'كراميل', role: null }, { option_name: 'فانيليا', role: null }],
+};

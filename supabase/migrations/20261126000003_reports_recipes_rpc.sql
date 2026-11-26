@@ -110,6 +110,21 @@ begin
          group by oi.donut_type_name, oi.pieces
       ) t), '[]'::jsonb),
 
+    -- قطع الدونتس حسب النوع: عادي/ميني/محشي — إجمالي القطع المباعة من كل نوع
+    'donut_pieces_by_type', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'name', t.name, 'pieces', t.pieces, 'boxes', t.boxes
+      ) order by t.pieces desc)
+      from (
+        select coalesce(oi.donut_type_name, 'دونتس') as name,
+               sum(oi.pieces) as pieces,
+               count(*) as boxes
+          from public.order_items oi
+         where oi.order_id in (select public._report_order_ids(v_branch, p_shift, p_from, p_to))
+           and oi.status <> 'cancelled' and oi.pieces is not null
+         group by oi.donut_type_name
+      ) t), '[]'::jsonb),
+
     -- قطع الدونتس بالصوص: كل صوص اتطلب على كام قطعة (حشوة وتوبنج منفصلين)
     'donut_pieces_by_sauce', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -172,7 +187,9 @@ begin
           'ingredient_name', ri.ingredient_name,
           'quantity', ri.quantity,
           'unit', ri.unit,
-          'per_unit', ri.per_unit
+          'per_unit', ri.per_unit,
+          'option_name', ri.option_name,
+          'role', ri.role
         ) order by ri.sort_order, ri.ingredient_name)
         from public.recipe_ingredients ri where ri.recipe_id = r.id), '[]'::jsonb)
     ))
@@ -213,13 +230,15 @@ begin
 
   if jsonb_typeof(p_recipe->'ingredients') = 'array' then
     for v_ing in select * from jsonb_array_elements(p_recipe->'ingredients') loop
-      insert into public.recipe_ingredients (branch_id, recipe_id, ingredient_name, quantity, unit, per_unit, sort_order)
+      insert into public.recipe_ingredients (branch_id, recipe_id, ingredient_name, quantity, unit, per_unit, option_name, role, sort_order)
       values (
         v_branch, v_id,
         v_ing->>'ingredient_name',
         (v_ing->>'quantity')::numeric,
         coalesce(nullif(v_ing->>'unit',''), 'جرام'),
         coalesce(nullif(v_ing->>'per_unit',''), 'item'),
+        nullif(v_ing->>'option_name',''),
+        nullif(v_ing->>'role','')::public.piece_role,
         coalesce((v_ing->>'sort_order')::int, 0));
     end loop;
   end if;
@@ -228,9 +247,11 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------
--- استهلاك الصوصات: الكمية المستهلكة محسوبة من الرسبي × المبيعات
--- وافل/مشروبات: كمية الصنف المباعة × كمية المكون لكل صنف
--- دونتس: عدد القطع المباعة من النوع × كمية المكون لكل قطعة
+-- استهلاك الصوصات: الكمية المستهلكة محسوبة من الرسبي × المبيعات الفعلية
+-- مكون أساسي (option_name فارغ): على كل وحدة/قطعة من الصنف
+-- مكون مرتبط بصوص (option_name محدد): على الاختيارات الفعلية فقط —
+--   دونتس: كل قطعة اختارت الصوص ده فعلاً (order_item_piece_options)
+--   وافل/مشروبات: كل صنف اتضافت عليه الإضافة دي فعلاً (order_item_options)
 -- ---------------------------------------------------------------------
 create or replace function public.sauce_consumption_report(
   p_shift uuid default null,
@@ -247,32 +268,71 @@ begin
   return jsonb_build_object(
    'consumption', coalesce((
     with consumption as (
-      -- أصناف المنيو (وافل ومشروبات): لكل وحدة مباعة
+      -- أصناف المنيو: مكون أساسي لكل وحدة مباعة
       select ri.ingredient_name, ri.unit,
-             mi.name as target_name,
+             mi.name as target_name, 'base' as kind,
              sum(oi.quantity) as units,
              sum(oi.quantity * ri.quantity) as consumed
         from public.recipe_ingredients ri
         join public.recipes r on r.id = ri.recipe_id and r.is_active
         join public.menu_items mi on mi.id = r.menu_item_id
         join public.order_items oi on oi.menu_item_id = r.menu_item_id and oi.status <> 'cancelled'
-       where ri.per_unit = 'item'
+       where ri.per_unit = 'item' and ri.option_name is null
          and r.branch_id = v_branch
          and oi.order_id in (select public._report_order_ids(v_branch, p_shift, p_from, p_to))
        group by ri.ingredient_name, ri.unit, mi.name
 
       union all
 
-      -- أنواع الدونتس: لكل قطعة
+      -- أصناف المنيو: مكون مرتبط بإضافة مختارة فعلياً على الصنف
       select ri.ingredient_name, ri.unit,
-             dt.name as target_name,
+             mi.name as target_name, 'option' as kind,
+             sum(oi.quantity) as units,
+             sum(oi.quantity * ri.quantity) as consumed
+        from public.recipe_ingredients ri
+        join public.recipes r on r.id = ri.recipe_id and r.is_active
+        join public.menu_items mi on mi.id = r.menu_item_id
+        join public.order_items oi on oi.menu_item_id = r.menu_item_id and oi.status <> 'cancelled'
+        join public.order_item_options oo
+          on oo.order_item_id = oi.id and oo.option_name = ri.option_name
+       where ri.per_unit = 'item' and ri.option_name is not null
+         and r.branch_id = v_branch
+         and oi.order_id in (select public._report_order_ids(v_branch, p_shift, p_from, p_to))
+       group by ri.ingredient_name, ri.unit, mi.name
+
+      union all
+
+      -- الدونتس: مكون أساسي لكل قطعة من النوع
+      select ri.ingredient_name, ri.unit,
+             dt.name as target_name, 'base' as kind,
              sum(oi.pieces) as units,
              sum(oi.pieces * ri.quantity) as consumed
         from public.recipe_ingredients ri
         join public.recipes r on r.id = ri.recipe_id and r.is_active
         join public.donut_types dt on dt.id = r.donut_type_id
         join public.order_items oi on oi.donut_type_id = r.donut_type_id and oi.status <> 'cancelled'
-       where ri.per_unit = 'piece'
+       where ri.per_unit = 'piece' and ri.option_name is null
+         and r.branch_id = v_branch
+         and oi.order_id in (select public._report_order_ids(v_branch, p_shift, p_from, p_to))
+       group by ri.ingredient_name, ri.unit, dt.name
+
+      union all
+
+      -- الدونتس: مكون مرتبط بصوص مختار فعلياً — لكل قطعة اختارته
+      select ri.ingredient_name, ri.unit,
+             dt.name as target_name, 'option' as kind,
+             count(po.id) as units,
+             sum(ri.quantity) as consumed
+        from public.recipe_ingredients ri
+        join public.recipes r on r.id = ri.recipe_id and r.is_active
+        join public.donut_types dt on dt.id = r.donut_type_id
+        join public.order_items oi on oi.donut_type_id = r.donut_type_id and oi.status <> 'cancelled'
+        join public.order_item_pieces pc on pc.order_item_id = oi.id
+        join public.order_item_piece_options po
+          on po.piece_id = pc.id
+         and po.option_name = ri.option_name
+         and (ri.role is null or po.role = ri.role)
+       where ri.per_unit = 'piece' and ri.option_name is not null
          and r.branch_id = v_branch
          and oi.order_id in (select public._report_order_ids(v_branch, p_shift, p_from, p_to))
        group by ri.ingredient_name, ri.unit, dt.name
@@ -287,7 +347,7 @@ begin
       select c.ingredient_name, c.unit,
              sum(c.consumed) as total_consumed,
              jsonb_agg(jsonb_build_object(
-               'target', c.target_name, 'units', c.units, 'consumed', c.consumed
+               'target', c.target_name, 'kind', c.kind, 'units', c.units, 'consumed', c.consumed
              )) as breakdown
         from consumption c
        group by c.ingredient_name, c.unit
@@ -314,7 +374,38 @@ begin
               select 1 from public.recipes r
                where r.branch_id = v_branch and r.is_active and r.donut_type_id = oi.donut_type_id)
           group by dt.name
-       ) t), '[]'::jsonb)
+       ) t), '[]'::jsonb),
+   -- صوصات اختارها العملاء فعلاً لأصناف ليها رسبي، بس مفيهاش كمية متسجلة —
+   -- الاستهلاك ناقص بقدرها ولازم تتظهر بالاسم
+   'unmapped_options', coalesce((
+     select jsonb_agg(t.label order by t.label) from (
+       select distinct po.option_name || ' (' ||
+              case po.role when 'filling' then 'حشوة' else 'توبنج' end ||
+              ' ' || coalesce(oi.donut_type_name, 'دونتس') || ')' as label
+         from public.order_item_piece_options po
+         join public.order_item_pieces pc on pc.id = po.piece_id
+         join public.order_items oi on oi.id = pc.order_item_id and oi.status <> 'cancelled'
+        where oi.order_id in (select public._report_order_ids(v_branch, p_shift, p_from, p_to))
+          and oi.donut_type_id is not null
+          and exists (select 1 from public.recipes r
+             where r.branch_id = v_branch and r.is_active and r.donut_type_id = oi.donut_type_id)
+          and not exists (select 1 from public.recipes r
+             join public.recipe_ingredients ri on ri.recipe_id = r.id
+             where r.branch_id = v_branch and r.is_active and r.donut_type_id = oi.donut_type_id
+               and ri.option_name = po.option_name and (ri.role is null or ri.role = po.role))
+       union
+       select distinct oo.option_name || ' (' || oi.item_name || ')'
+         from public.order_item_options oo
+         join public.order_items oi on oi.id = oo.order_item_id and oi.status <> 'cancelled'
+        where oi.order_id in (select public._report_order_ids(v_branch, p_shift, p_from, p_to))
+          and oi.menu_item_id is not null
+          and exists (select 1 from public.recipes r
+             where r.branch_id = v_branch and r.is_active and r.menu_item_id = oi.menu_item_id)
+          and not exists (select 1 from public.recipes r
+             join public.recipe_ingredients ri on ri.recipe_id = r.id
+             where r.branch_id = v_branch and r.is_active and r.menu_item_id = oi.menu_item_id
+               and ri.option_name = oo.option_name)
+     ) t), '[]'::jsonb)
   );
 end $$;
 

@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
 import { posService, isPosDemoMode } from '@/services/pos.service';
 import { formatCurrency } from '@/utils/formatters';
-import { BarChart3, RefreshCw, AlertCircle } from 'lucide-react';
+import { ThermalReportDoc } from '@/components/shared/ThermalReportPrint';
+import { BarChart3, RefreshCw, AlertCircle, Printer, X } from 'lucide-react';
 
 interface ShiftOption {
   id: string;
@@ -19,6 +21,9 @@ export const Reports: React.FC = () => {
   const [shiftReport, setShiftReport] = useState<any>(null);
   const [salesReport, setSalesReport] = useState<any>(null);
   const [sauceReport, setSauceReport] = useState<any>(null);
+  const [printPreview, setPrintPreview] = useState<'sales' | 'items' | null>(null);
+
+  const selectedShiftObj = shifts.find((s) => s.id === selectedShift) || null;
 
   // تحميل الشفتات
   useEffect(() => {
@@ -130,9 +135,19 @@ export const Reports: React.FC = () => {
           {/* 1. تقرير نهاية الشفت */}
           {shiftReport && (
             <section className="rounded-xl border border-line bg-surface p-3.5 shadow-2xs space-y-3">
-              <h3 className="font-extrabold text-sm text-ink border-b border-line pb-2">
-                تقرير نهاية الشفت {shiftReport.status === 'open' ? '(شفت مفتوح)' : '(شفت مقفول)'}
-              </h3>
+              <div className="flex items-center justify-between gap-2 border-b border-line pb-2">
+                <h3 className="font-extrabold text-sm text-ink">
+                  تقرير نهاية الشفت {shiftReport.status === 'open' ? '(شفت مفتوح)' : '(شفت مقفول)'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setPrintPreview('sales')}
+                  className="flex items-center gap-1 py-1 px-2.5 rounded-lg border border-line text-ink-muted hover:text-ink hover:bg-surface-2 text-[11px] font-bold cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>طباعة 80مم</span>
+                </button>
+              </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <StatCard label="عدد الأوردرات" value={String(shiftReport.orders?.count ?? 0)} />
@@ -177,7 +192,17 @@ export const Reports: React.FC = () => {
           {/* 2. تقرير الأصناف مقسمة */}
           {salesReport && (
             <section className="rounded-xl border border-line bg-surface p-3.5 shadow-2xs space-y-3">
-              <h3 className="font-extrabold text-sm text-ink border-b border-line pb-2">مبيعات الأصناف</h3>
+              <div className="flex items-center justify-between gap-2 border-b border-line pb-2">
+                <h3 className="font-extrabold text-sm text-ink">مبيعات الأصناف</h3>
+                <button
+                  type="button"
+                  onClick={() => setPrintPreview('items')}
+                  className="flex items-center gap-1 py-1 px-2.5 rounded-lg border border-line text-ink-muted hover:text-ink hover:bg-surface-2 text-[11px] font-bold cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>طباعة 80مم</span>
+                </button>
+              </div>
 
               {/* البوكسات */}
               <div>
@@ -196,18 +221,17 @@ export const Reports: React.FC = () => {
                 </div>
               </div>
 
-              {/* قطع الدونتس بالصوص */}
+              {/* قطع الدونتس حسب النوع */}
               <div>
-                <span className="text-xs font-extrabold text-ink block mb-1.5">قطع الدونتس بالصوص (بالاسم):</span>
+                <span className="text-xs font-extrabold text-ink block mb-1.5">قطع الدونتس حسب النوع:</span>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {(salesReport.donut_pieces_by_sauce || []).map((s: any) => (
-                    <div key={`${s.sauce}-${s.role}`} className="p-2.5 rounded-lg bg-surface-2/40 border border-line text-center">
-                      <div className="text-xs font-bold text-ink">{s.sauce}</div>
-                      <div className="text-[10px] text-ink-muted">{s.role === 'filling' ? 'حشوة' : 'توبنج'}</div>
-                      <div className="text-lg font-black text-brand-700 font-mono">{s.pieces}</div>
+                  {(salesReport.donut_pieces_by_type || []).map((t: any) => (
+                    <div key={t.name} className="p-2.5 rounded-lg bg-surface-2/40 border border-line text-center">
+                      <div className="text-xs font-bold text-ink">{t.name}</div>
+                      <div className="text-lg font-black text-brand-700 font-mono">{t.pieces}</div>
                     </div>
                   ))}
-                  {(salesReport.donut_pieces_by_sauce || []).length === 0 && (
+                  {(salesReport.donut_pieces_by_type || []).length === 0 && (
                     <p className="text-[11px] text-ink-muted col-span-full">لا توجد قطع دونتس</p>
                   )}
                 </div>
@@ -265,6 +289,15 @@ export const Reports: React.FC = () => {
                 </span>
               </div>
             )}
+            {(sauceReport?.unmapped_options || []).length > 0 && (
+              <div className="p-2.5 rounded-lg border border-amber-300 bg-amber-50 text-[11px] font-bold text-amber-900 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  صوصات اختارها العملاء وليست لها كمية في الرسبي، فلم تدخل في الاستهلاك —{' '}
+                  {(sauceReport.unmapped_options || []).join('، ')}. اربطها بكمية من تبويب الرسبي.
+                </span>
+              </div>
+            )}
             {(sauceReport?.consumption || []).length === 0 ? (
               <p className="text-[11px] text-ink-muted">
                 لا يوجد استهلاك محسوب. جهّز وصفات الأصناف من لوحة الإدارة — تبويب الرسبي.
@@ -288,6 +321,78 @@ export const Reports: React.FC = () => {
           </section>
         </>
       )}
+
+      {/* معاينة طباعة حرارية 80مم — نفس المكوّن المستخدم في الطباعة الفعلية */}
+      {printPreview && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setPrintPreview(null)}
+        >
+          <div
+            className="bg-surface rounded-2xl shadow-xl border border-line p-3.5 max-h-[92vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <span className="text-xs font-extrabold text-ink">
+                معاينة الطباعة — ورق حراري 80مم
+              </span>
+              <button
+                type="button"
+                onClick={() => setPrintPreview(null)}
+                className="p-1 rounded-lg text-ink-muted hover:text-ink cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="border border-dashed border-line bg-white mx-auto" style={{ width: '80mm' }}>
+              <div style={{ padding: '2mm 4mm' }}>
+                <ThermalReportDoc
+                  kind={printPreview}
+                  shiftReport={shiftReport}
+                  salesReport={salesReport}
+                  shift={selectedShiftObj}
+                  sauceReport={sauceReport}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex-1 py-2 px-3 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>طباعة</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrintPreview(null)}
+                className="py-2 px-3 rounded-xl border border-line text-ink font-bold text-xs cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+            <p className="text-[10px] text-ink-muted mt-2">
+              عند الطباعة اختر الطابعة الحرارية 80مم؛ التخطيط مضبوط على عرض 80مم تلقائياً.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* جذر الطباعة الفعلي: portal على body، يظهر وحده في @media print */}
+      {printPreview &&
+        createPortal(
+          <div className="thermal-print-root">
+            <ThermalReportDoc
+              kind={printPreview}
+              shiftReport={shiftReport}
+              salesReport={salesReport}
+              shift={selectedShiftObj}
+              sauceReport={sauceReport}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };

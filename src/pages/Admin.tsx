@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase, isLiveSupabaseConfigured } from '@/lib/supabase';
 import {
   menuService,
   UnifiedDonutBoxSize,
@@ -39,6 +42,24 @@ const TABS = [
 export const Admin: React.FC = () => {
   const [activeTab, setActiveTab] = useState('donuts');
   const { hasActionPermission } = usePermissions();
+  const { branch } = useAuth();
+
+  // الطابعات المسجلة فعلياً في قاعدة البيانات (تُجلب فقط عند فتح التبويب)
+  const { data: printersList = [], isLoading: isPrintersLoading } = useQuery<any[]>({
+    queryKey: ['printers', branch?.id || ''],
+    enabled: activeTab === 'printers',
+    queryFn: async () => {
+      if (!isLiveSupabaseConfigured || !supabase) return [];
+      let q = supabase
+        .from('printers')
+        .select('id, name, connection_type, ip_address, port, paper_width_mm, is_active')
+        .order('created_at');
+      if (branch?.id) q = q.eq('branch_id', branch.id);
+      const { data, error } = await q;
+      if (error) throw new Error(error.message);
+      return data || [];
+    },
+  });
 
   // الحالة الديناميكية للأقسام وبوكسات الدونتس الموحدة
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -507,22 +528,44 @@ export const Admin: React.FC = () => {
         {activeTab === 'printers' && (
           <div className="space-y-3">
             <div className="border-b border-line pb-2.5">
-              <h3 className="text-sm font-extrabold text-ink">إعدادات طابعات الملصقات</h3>
+              <h3 className="text-sm font-extrabold text-ink">الطابعات المسجلة</h3>
+              <p className="text-[11px] text-ink-muted mt-0.5">
+                القائمة من جدول الطابعات في قاعدة البيانات. التطبيق لا يتحقق من اتصال الأجهزة الفعلي؛
+                طباعة التقارير والإيصالات تتم عبر نافذة طباعة المتصفح.
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div className="p-3 rounded-lg bg-surface-2/40 border border-line space-y-1">
-                <div className="font-extrabold text-xs text-brand-800">طابعة قسم الوافل (LAN)</div>
-                <div className="text-xs text-ink-muted font-mono">IP: 192.168.1.200 : 9100</div>
-                <div className="text-xs text-emerald-700 font-bold">الحالة: متصلة وجاهزة</div>
+            {isPrintersLoading ? (
+              <p className="text-[11px] text-ink-muted">جاري التحميل...</p>
+            ) : printersList.length === 0 ? (
+              <div className="p-4 rounded-lg bg-surface-2/40 border border-line text-center space-y-1">
+                <p className="text-xs font-bold text-ink">لا توجد طابعات مسجلة</p>
+                <p className="text-[11px] text-ink-muted">
+                  لم تُسجَّل أي طابعة في قاعدة البيانات لهذا الفرع بعد.
+                </p>
               </div>
-
-              <div className="p-3 rounded-lg bg-surface-2/40 border border-line space-y-1">
-                <div className="font-extrabold text-xs text-brand-800">طابعة بار المشروبات (LAN)</div>
-                <div className="text-xs text-ink-muted font-mono">IP: 192.168.1.201 : 9100</div>
-                <div className="text-xs text-emerald-700 font-bold">الحالة: متصلة وجاهزة</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {printersList.map((p) => (
+                  <div key={p.id} className="p-3 rounded-lg bg-surface-2/40 border border-line space-y-1">
+                    <div className="font-extrabold text-xs text-brand-800">
+                      {p.name} ({p.connection_type === 'lan' ? 'LAN' : p.connection_type === 'usb' ? 'USB' : 'بلوتوث'})
+                    </div>
+                    {p.ip_address && (
+                      <div className="text-xs text-ink-muted font-mono">
+                        IP: {p.ip_address} : {p.port ?? 9100}
+                      </div>
+                    )}
+                    {p.paper_width_mm && (
+                      <div className="text-[11px] text-ink-muted">ورق: {p.paper_width_mm}مم</div>
+                    )}
+                    <div className={`text-[11px] font-bold ${p.is_active ? 'text-ink' : 'text-ink-muted'}`}>
+                      {p.is_active ? 'مسجلة ومفعّلة' : 'مسجلة وموقوفة'}
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
+            )}
           </div>
         )}
 

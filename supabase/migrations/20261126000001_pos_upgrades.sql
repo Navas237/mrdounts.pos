@@ -40,6 +40,9 @@ create trigger recipes_updated_at before update on public.recipes
 -- مكونات الوصفة: اسم المكون (صوص) وكميته لكل وحدة مبيعات
 -- per_unit = 'item'  : الكمية لكل وحدة مباعة من الصنف (وافل / مشروب)
 -- per_unit = 'piece' : الكمية لكل قطعة دونتس (من نوع الدونتس صاحب الوصفة)
+-- option_name فارغ = مكون أساسي يُحسب على كل وحدة/قطعة
+-- option_name محدد = يُحسب فقط عند اختيار هذا الصوص فعلياً في الأوردر
+--   (للدونتس: role يحدد حشوة ولا توبنج؛ فارغ يطابق أي دور)
 create table public.recipe_ingredients (
   id              uuid primary key default gen_random_uuid(),
   branch_id       uuid not null references public.branches(id) on delete cascade,
@@ -48,6 +51,8 @@ create table public.recipe_ingredients (
   quantity        numeric(10,3) not null check (quantity > 0),
   unit            text not null default 'جرام',
   per_unit        text not null default 'item' check (per_unit in ('item','piece')),
+  option_name     text,
+  role            public.piece_role,
   sort_order      int not null default 0
 );
 create index recipe_ingredients_recipe_idx on public.recipe_ingredients (recipe_id);

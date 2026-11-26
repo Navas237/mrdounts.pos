@@ -261,7 +261,7 @@ export const posService = {
     target_type: 'menu_item' | 'donut_type';
     menu_item_id?: string;
     donut_type_id?: string;
-    ingredients: Array<{ ingredient_name: string; quantity: number; unit?: string; per_unit?: string }>;
+    ingredients: Array<{ ingredient_name: string; quantity: number; unit?: string; per_unit?: string; option_name?: string; role?: string }>;
   }): Promise<{ id: string }> {
     const client = ensureLive();
     const { data, error } = await client.rpc('upsert_recipe', { p_recipe: recipe });
